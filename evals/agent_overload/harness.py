@@ -125,14 +125,22 @@ def _expected_metadata(
     created_agents: dict[str, str],
 ) -> dict[str, Any]:
     names = list(expected.acceptable_agent_names)
+    missing_dependency = None
     if expected.agent_from_task:
-        names.append(created_agents[expected.agent_from_task])
+        created_name = created_agents.get(expected.agent_from_task)
+        if created_name:
+            names.append(created_name)
+        else:
+            missing_dependency = expected.agent_from_task
     return {
         "task_key": expected.task_key,
         "route": expected.route,
         "acceptable_agent_names": names,
         "required_facts": list(expected.required_facts),
         "forbidden_facts": list(expected.forbidden_facts),
+        "min_calls": expected.min_calls,
+        "max_calls": expected.max_calls,
+        "missing_dependency": missing_dependency,
     }
 
 
@@ -237,12 +245,18 @@ async def run_case(case: RoutingCase) -> list[LLMTestCase]:
                     and isinstance(call.output, dict)
                     and bool((call.output.get("payload") or {}).get("new_agent_created"))
                 ]
-                for expected_item, actual_name in zip(
-                    (item for item in turn.delegations if item.route == "create"),
-                    created_now,
-                ):
-                    if isinstance(actual_name, str):
-                        created_agents[expected_item.task_key] = actual_name
+                exact_creates = [
+                    item
+                    for item in turn.delegations
+                    if item.route == "create" and item.min_calls == 1 and item.max_calls == 1
+                ]
+                flexible_create = any(
+                    item.route == "create" and item.max_calls != 1 for item in turn.delegations
+                )
+                if not flexible_create and len(created_now) == len(exact_creates):
+                    for expected_item, actual_name in zip(exact_creates, created_now):
+                        if isinstance(actual_name, str):
+                            created_agents[expected_item.task_key] = actual_name
                 metadata = {
                     "case_name": case.name,
                     "turn_index": index,

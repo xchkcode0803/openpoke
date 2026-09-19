@@ -21,6 +21,11 @@ def _routing_case(
         actual_output="I am on it.",
         tools_called=[
             ToolCall(
+                name="send_message_to_user",
+                input_parameters={"message": "I will look into that."},
+                output={"success": True, "payload": {"status": "delivered"}},
+            ),
+            ToolCall(
                 name="send_message_to_agent",
                 input_parameters={"agent_name": agent_name, "instructions": "Find more Montreal hotels."},
                 output={"success": True, "payload": {"new_agent_created": route == "create"}},
@@ -59,6 +64,44 @@ def test_deterministic_grader_rejects_extra_delegation() -> None:
     metric = RoutingCorrectnessMetric()
     assert metric.measure(test_case) == 0.0
     assert "extra delegation" in metric.reason
+
+
+def test_deterministic_grader_accepts_parallel_create_range() -> None:
+    test_case = LLMTestCase(
+        input="Research whether I should move to Montreal permanently.",
+        actual_output="I will research that.",
+        tools_called=[
+            ToolCall(name="send_message_to_user", input_parameters={"message": "I will research that."}),
+            ToolCall(name="send_message_to_agent", input_parameters={"agent_name": "Montreal Cost Research", "instructions": "Research costs and jobs."}, output={"success": True, "payload": {"new_agent_created": True}}),
+            ToolCall(name="send_message_to_agent", input_parameters={"agent_name": "Montreal Immigration Research", "instructions": "Research immigration and climate."}, output={"success": True, "payload": {"new_agent_created": True}}),
+        ],
+        metadata={
+            "runtime_success": True,
+            "expected_action": "delegate",
+            "expected_delegations": [
+                {"task_key": "move", "route": "create", "acceptable_agent_names": [], "required_facts": [], "forbidden_facts": [], "min_calls": 1, "max_calls": None, "missing_dependency": None}
+            ],
+        },
+    )
+    assert RoutingCorrectnessMetric().measure(test_case) == 1.0
+
+
+def test_deterministic_grader_records_missing_created_dependency() -> None:
+    test_case = LLMTestCase(
+        input="Continue the dinner planning.",
+        actual_output="I will continue.",
+        tools_called=[],
+        metadata={
+            "runtime_success": True,
+            "expected_action": "delegate",
+            "expected_delegations": [
+                {"task_key": "dinner", "route": "reuse", "acceptable_agent_names": [], "required_facts": [], "forbidden_facts": [], "min_calls": 1, "max_calls": 1, "missing_dependency": "maya_dinner"}
+            ],
+        },
+    )
+    metric = RoutingCorrectnessMetric()
+    assert metric.measure(test_case) == 0.0
+    assert "required prior agent was not created" in metric.reason
 
 
 class _FakeJev:
@@ -119,7 +162,7 @@ def test_semantic_grader_uses_fallback_for_uncertain_answer() -> None:
     fallback = _FakeFallback(True)
     metric = InstructionFidelityMetric(_FakeJev(0.5), fallback)
     assert asyncio.run(metric.a_measure(_semantic_case("Draft the repair-date follow-up."))) == 1.0
-    assert fallback.calls == 3
+    assert fallback.calls == 4
 
 
 @pytest.mark.live

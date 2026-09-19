@@ -37,7 +37,11 @@ Each routing case describes:
 - Any facts or constraints that must be preserved in delegated instructions.
 - Tags identifying its suite and scenario group.
 
+Each expected delegation also defines a permitted call range. Ordinary work expects exactly one matching call. Parallelizable work accepts one or more related calls and is graded on combined task coverage. Only one flexible delegation group is allowed in a turn so matching stays deterministic.
+
 Single-turn and multi-turn cases use the same structure. Multi-turn cases simply contain more incoming messages.
+
+Cases encode only behavior required by the current interaction prompt and tools. Unimplemented product policies are not executable eval expectations.
 
 Normal semantic cases remain hand-written and readable. Separate helper functions create overload variants by adding unrelated agents, similar agents, changing roster order, or changing the target agent's position.
 

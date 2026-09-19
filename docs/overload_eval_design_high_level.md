@@ -4,6 +4,8 @@ This document currently records only the high-level test-suite case groups.
 
 Baseline cases use the inputs available today: execution-agent names, the main conversation history (raw or summarized), and the incoming user message or worker update. They do not require private execution-agent histories or additional agent metadata.
 
+The current interaction prompt and tool behavior are the baseline contract. Product ideas that are not required by that contract, such as mandatory clarification or one persistent agent per broad goal, are excluded from scoring.
+
 ## Core routing cases
 
 Normal routing behavior with a small, clear agent roster:
@@ -11,7 +13,6 @@ Normal routing behavior with a small, clear agent roster:
 - Reuse the correct existing agent.
 - Create an agent when no existing agent owns the task.
 - Route multiple independent tasks to the appropriate agents.
-- Ask for clarification when the available context is insufficient.
 - Avoid delegation when no execution work is needed.
 - Preserve important user instructions when delegating.
 - Avoid duplicate delegation and work beyond the user's request.
@@ -20,13 +21,12 @@ Normal routing behavior with a small, clear agent roster:
 
 - Resolve pronouns and omitted subjects from the visible conversation.
 - Follow topic changes and explicit user corrections.
-- Route with summarized conversation when it contains sufficient information; clarify when necessary information is missing.
+- Route with summarized conversation when it contains sufficient information.
 
 ### routing_across_turns
 
 - Create an agent for a new task, then reuse it for a follow-up.
 - Switch tasks and return to the original agent without creating a duplicate.
-- Ask for clarification, then route using the user's answer.
 
 ### execution_agent_updates
 
@@ -43,7 +43,7 @@ Routing when several agents appear plausible:
 - Broad agent versus specialized agent.
 - Existing task versus a new but related task.
 - Several agents with very similar names.
-- Several acceptable agents, where any suitable choice is valid, versus unresolved ambiguity requiring clarification.
+- Several acceptable agents, where any suitable choice is valid.
 
 ## Overload cases
 
@@ -60,7 +60,6 @@ Separately, increase the number of requested tasks and required agents to test c
 ### negative_decisions_under_overload
 
 - Create an agent when a large roster contains plausible alternatives but no suitable owner.
-- Ask for clarification when a large roster and the available conversation leave the request ambiguous.
 - Avoid delegation when execution work is unnecessary, regardless of roster size.
 
 ## Stability cases
@@ -79,7 +78,7 @@ Repeat equivalent cases while changing details that should not affect routing:
 
 These determine whether a case passes:
 
-- Make the correct routing decision: reuse, create, clarify, route to multiple agents, or avoid delegation.
+- Make the correct routing decision: reuse, create, route to multiple agents, respond, wait, or avoid delegation.
 - Cover every requested task.
 - Avoid extra or incorrect delegations.
 - Preserve important user instructions and constraints.
@@ -115,7 +114,7 @@ Record these separately from the initial pass/fail result:
 
 This benchmark ends after the routing decision. It does not evaluate whether execution agents successfully complete Gmail, reminder, research, or other downstream work.
 
-Do not grade exact acknowledgement wording, hidden reasoning, exact tool-call order for independent tasks, the precise number of reasoning steps, or harmless wording differences in delegated instructions.
+Grade that the user is acknowledged before delegation, as required by the current prompt. Do not grade exact acknowledgement wording, hidden reasoning, exact tool-call order among independent agent calls, the precise number of reasoning steps, or harmless wording differences in delegated instructions.
 
 ## Grading strategy
 
@@ -129,7 +128,7 @@ Use deterministic checks wherever the expected behavior can be derived from the 
 - Reuse and creation decisions.
 - Missing, extra, or duplicate delegations.
 - Task coverage when ownership is explicit.
-- Clarification or no-delegation behavior.
+- Response, wait, or no-delegation behavior.
 - Routing loops and repeated assignment.
 
 These checks are authoritative and do not use a model judge.
@@ -141,8 +140,11 @@ Use a pinned Jev model for narrow semantic decisions that deterministic code can
 - Delegated instructions preserve the requested work.
 - Important user constraints are preserved.
 - Newly created agents receive the correct task.
-- Clarification questions address the actual ambiguity.
 - Delegations do not introduce unrequested work.
+
+Related parallel workers are valid when their combined work covers the request. A delegation is extra only when it is unrelated, duplicates work, or exceeds an explicit case constraint.
+
+Worker-result cases distinguish complete results, which should be reported, from incomplete results, which may require follow-up delegation.
 
 Define each judgment as a focused yes-or-no or fixed-choice decision. Record Jev's answer and probability.
 

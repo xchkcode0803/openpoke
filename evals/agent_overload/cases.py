@@ -8,7 +8,7 @@ from typing import Literal
 
 
 TurnSource = Literal["user", "execution_agent"]
-ExpectedAction = Literal["delegate", "clarify", "respond", "wait"]
+ExpectedAction = Literal["delegate", "respond", "wait"]
 RouteKind = Literal["reuse", "create"]
 ConversationEntry = tuple[str, str]
 
@@ -21,6 +21,8 @@ class ExpectedDelegation:
     required_facts: tuple[str, ...] = ()
     forbidden_facts: tuple[str, ...] = ()
     agent_from_task: str | None = None
+    min_calls: int = 1
+    max_calls: int | None = 1
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,8 @@ def reuse(
     required_facts: tuple[str, ...] = (),
     forbidden_facts: tuple[str, ...] = (),
     agent_from_task: str | None = None,
+    min_calls: int = 1,
+    max_calls: int | None = 1,
 ) -> ExpectedDelegation:
     return ExpectedDelegation(
         task_key=task_key,
@@ -57,6 +61,8 @@ def reuse(
         required_facts=required_facts,
         forbidden_facts=forbidden_facts,
         agent_from_task=agent_from_task,
+        min_calls=min_calls,
+        max_calls=max_calls,
     )
 
 
@@ -64,12 +70,16 @@ def create(
     task_key: str,
     *required_facts: str,
     forbidden_facts: tuple[str, ...] = (),
+    min_calls: int = 1,
+    max_calls: int | None = 1,
 ) -> ExpectedDelegation:
     return ExpectedDelegation(
         task_key=task_key,
         route="create",
         required_facts=required_facts,
         forbidden_facts=forbidden_facts,
+        min_calls=min_calls,
+        max_calls=max_calls,
     )
 
 
@@ -193,7 +203,7 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
         "Creates an agent then reuses that exact owner later.",
         (),
         (
-            user("Help me plan a birthday dinner for Maya.", "delegate", create("maya_dinner", "plan Maya's birthday dinner")),
+            user("Plan Maya's birthday dinner in Toronto next Saturday at 7 PM for six people. Budget up to $100 per person, Italian food, and no shellfish. Find restaurant options and help coordinate the reservation.", "delegate", create("maya_dinner", "plan Maya's Toronto birthday dinner next Saturday at 7 PM for six people", "keep the budget at or below $100 per person", "find Italian options with no shellfish and help coordinate the reservation")),
             user("Can you find a few restaurant options for it?", "delegate", reuse("maya_dinner_follow_up", required_facts=("find restaurant options for Maya's birthday dinner",), agent_from_task="maya_dinner")),
         ),
         "development", "multi_turn", "smoke",
@@ -210,21 +220,18 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
         "development", "multi_turn",
     ),
     _case(
-        "routes_after_clarification_answer",
-        "Asks first, then routes using the user's answer.",
-        ("Email Maya About Apartment", "Maya Birthday Dinner"),
-        (
-            user("Did Maya reply?", "clarify", response_requirements=("ask whether the user means the apartment or dinner conversation",)),
-            user("The dinner reservation.", "delegate", reuse("maya_dinner", "Maya Birthday Dinner", required_facts=("check Maya's dinner reservation reply",))),
-        ),
-        "development", "multi_turn", "smoke", "semantic",
+        "requests_details_after_incomplete_worker_update",
+        "Reuses the reporting worker when its result omits the useful details.",
+        ("Montreal Hotel Search",),
+        (worker("[SUCCESS] Montreal Hotel Search: I found three hotels near Old Montreal.", "delegate", reuse("hotel_details", "Montreal Hotel Search", required_facts=("provide the three hotel names and details",))),),
+        "development", "worker_update", "smoke", "semantic",
     ),
     # Execution-agent updates: 3
     _case(
         "reports_completed_worker_update_without_redelegating",
         "Reports a completed worker result without restarting the task.",
         ("Montreal Hotel Search",),
-        (worker("[SUCCESS] Montreal Hotel Search: I found three hotels near Old Montreal.", "respond", response_requirements=("report the hotel options",)),),
+        (worker("[SUCCESS] Montreal Hotel Search: Hotel Nelligan is $290 per night, Le Petit Hotel is $245 per night, and William Gray is $320 per night. All three are near Old Montreal.", "respond", response_requirements=("report the three named hotels and their prices",)),),
         "development", "worker_update", "smoke", "semantic",
     ),
     _case(
@@ -288,18 +295,11 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
     ),
     # Negative overload: 3
     _case(
-        "creates_new_agent_when_similar_roster_has_no_owner",
-        "Does not force a new task into a related existing agent.",
+        "creates_related_agents_when_existing_travel_agents_do_not_fit",
+        "Creates one or more relevant relocation workers instead of reusing travel agents.",
         ("Montreal Hotel Search", "Montreal Flight Search", "Montreal Restaurant Reservations"),
-        (user("Research whether I should move to Montreal permanently.", "delegate", create("montreal_move", "research moving to Montreal permanently")),),
-        "development", "negative", "smoke",
-    ),
-    _case(
-        "clarifies_ambiguous_request_under_large_roster",
-        "Does not guess when two visible owners remain equally plausible.",
-        ("Email Maya About Apartment", "Maya Birthday Dinner", "Montreal Hotel Search"),
-        (user("Did Maya reply?", "clarify", response_requirements=("ask which Maya conversation the user means",)),),
-        "development", "negative", "semantic",
+        (user("Research whether I should move to Montreal permanently.", "delegate", create("montreal_move", "research moving to Montreal permanently", min_calls=1, max_calls=None)),),
+        "development", "negative", "smoke", "semantic",
     ),
     _case(
         "does_not_delegate_simple_response_under_large_roster",
@@ -334,6 +334,7 @@ def validate_cases(cases: tuple[RoutingCase, ...]) -> None:
             raise ValueError(f"duplicate initial agents: {case.name}")
         created_tasks: set[str] = set()
         for turn in case.turns:
+            flexible_groups = 0
             if turn.expected_action == "delegate" and not turn.delegations:
                 raise ValueError(f"delegation expected without targets: {case.name}")
             if turn.expected_action != "delegate" and turn.delegations:
@@ -345,6 +346,16 @@ def validate_cases(cases: tuple[RoutingCase, ...]) -> None:
                     created_tasks.add(expected.task_key)
                 if expected.agent_from_task and expected.agent_from_task not in created_tasks:
                     raise ValueError(f"unknown created-agent reference: {case.name}")
+                if expected.min_calls < 1:
+                    raise ValueError(f"delegation minimum must be positive: {case.name}")
+                if expected.max_calls is not None and expected.max_calls < expected.min_calls:
+                    raise ValueError(f"delegation range is invalid: {case.name}")
+                if expected.max_calls is None or expected.max_calls > 1:
+                    flexible_groups += 1
+                    if expected.agent_from_task:
+                        raise ValueError(f"dynamic reuse cannot be flexible: {case.name}")
+            if flexible_groups > 1:
+                raise ValueError(f"only one flexible delegation group is allowed: {case.name}")
 
 
 def add_unrelated_agents(case: RoutingCase, count: int, seed: int) -> RoutingCase:
@@ -415,23 +426,23 @@ def smoke_cases() -> tuple[RoutingCase, ...]:
         "preserves_draft_only_restriction",
         "uses_conversation_to_resolve_pronoun",
         "reuses_agent_created_earlier_in_conversation",
-        "routes_after_clarification_answer",
+        "requests_details_after_incomplete_worker_update",
         "reports_completed_worker_update_without_redelegating",
         "distinguishes_same_person_different_tasks",
-        "creates_new_agent_when_similar_roster_has_no_owner",
+        "creates_related_agents_when_existing_travel_agents_do_not_fit",
         "routes_existing_and_new_task",
     }
     authored = tuple(case for case in DEVELOPMENT_CASES if case.name in names)
     return authored + (
         add_unrelated_agents(_named_case("reuses_existing_hotel_search_agent"), 100, 11),
-        add_unrelated_agents(_named_case("creates_new_agent_when_similar_roster_has_no_owner"), 100, 13),
+        add_unrelated_agents(_named_case("creates_related_agents_when_existing_travel_agents_do_not_fit"), 100, 13),
     )
 
 
 def standard_cases() -> tuple[RoutingCase, ...]:
     representative = (
         _named_case("reuses_existing_hotel_search_agent"),
-        _named_case("creates_new_agent_when_similar_roster_has_no_owner"),
+        _named_case("creates_related_agents_when_existing_travel_agents_do_not_fit"),
         _named_case("uses_conversation_to_resolve_pronoun"),
         _named_case("routes_two_existing_tasks") if any(case.name == "routes_two_existing_tasks" for case in DEVELOPMENT_CASES) else _named_case("selects_agent_from_unrelated_roster"),
     )
@@ -440,7 +451,7 @@ def standard_cases() -> tuple[RoutingCase, ...]:
 
 def full_cases() -> tuple[RoutingCase, ...]:
     reuse_seed = _named_case("reuses_existing_hotel_search_agent")
-    create_seed = _named_case("creates_new_agent_when_similar_roster_has_no_owner")
+    create_seed = _named_case("creates_related_agents_when_existing_travel_agents_do_not_fit")
     context_seed = _named_case("uses_conversation_to_resolve_pronoun")
     confusing_seed = _named_case("distinguishes_same_person_different_tasks")
     variants: list[RoutingCase] = []

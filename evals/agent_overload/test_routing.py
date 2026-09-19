@@ -59,6 +59,26 @@ def test_harness_uses_evaluation_data_directory() -> None:
     assert str(execution_logs._base_dir).startswith(str(_EVAL_DATA_DIR))
 
 
+def test_missing_created_agent_dependency_is_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
+    import server.agents.interaction_agent.runtime as runtime_module
+
+    async def no_delegation(*args, **kwargs):
+        return {"choices": [{"message": {"content": "I cannot start that task yet."}}]}
+
+    monkeypatch.setattr(runtime_module, "request_chat_completion", no_delegation)
+    case = next(
+        item
+        for item in DEVELOPMENT_CASES
+        if item.name == "reuses_agent_created_earlier_in_conversation"
+    )
+    results = asyncio.run(run_case(case))
+    assert len(results) == 2
+    assert results[1].metadata["expected_delegations"][0]["missing_dependency"] == "maya_dinner"
+    metric = RoutingCorrectnessMetric()
+    assert metric.measure(results[1]) == 0.0
+    assert "required prior agent was not created" in metric.reason
+
+
 def _evaluate_live_case(case) -> None:
     results = asyncio.run(run_case(case))
     for result in results:

@@ -224,7 +224,14 @@ class RoutingCorrectnessMetric(BaseMetric):
 
         if expected_action == "delegate":
             unmatched = list(actual)
-            for item in expected:
+            exact_expectations = [item for item in expected if item.get("max_calls", 1) == 1]
+            flexible_expectations = [item for item in expected if item.get("max_calls", 1) != 1]
+            for item in exact_expectations:
+                if item.get("missing_dependency"):
+                    failures.append(
+                        f"required prior agent was not created: {item['missing_dependency']}"
+                    )
+                    continue
                 route = item["route"]
                 names = set(item.get("acceptable_agent_names") or [])
                 match_index = next(
@@ -240,18 +247,49 @@ class RoutingCorrectnessMetric(BaseMetric):
                     failures.append(f"missing {route} delegation for {item['task_key']}: {detail}")
                 else:
                     unmatched.pop(match_index)
+            for item in flexible_expectations:
+                route = item["route"]
+                names = set(item.get("acceptable_agent_names") or [])
+                matching = [
+                    call
+                    for call in unmatched
+                    if _route(call) == route and (route == "create" or _agent_name(call) in names)
+                ]
+                minimum = int(item.get("min_calls", 1))
+                maximum = item.get("max_calls")
+                if len(matching) < minimum:
+                    failures.append(
+                        f"missing {route} delegation for {item['task_key']}: expected at least {minimum}"
+                    )
+                if maximum is not None and len(matching) > int(maximum):
+                    failures.append(
+                        f"too many {route} delegations for {item['task_key']}: expected at most {maximum}"
+                    )
+                for call in matching:
+                    unmatched.remove(call)
             if unmatched:
                 failures.append("extra delegation: " + ", ".join(_agent_name(call) for call in unmatched))
             seen = [_agent_name(call) for call in actual]
             if len(seen) != len(set(seen)):
                 failures.append("duplicate agent delegation")
+            tool_names = [call.name for call in test_case.tools_called or []]
+            first_agent = next(
+                (index for index, name in enumerate(tool_names) if name == "send_message_to_agent"),
+                None,
+            )
+            acknowledged = any(
+                name == "send_message_to_user"
+                for name in tool_names[:first_agent] if first_agent is not None
+            )
+            if first_agent is not None and not acknowledged:
+                failures.append("delegation occurred before user acknowledgement")
         else:
             if actual:
                 failures.append("delegated when no delegation was expected")
             tool_names = [call.name for call in test_case.tools_called or []]
             if expected_action == "wait" and "wait" not in tool_names:
                 failures.append("expected wait tool")
-            if expected_action in {"clarify", "respond"}:
+            if expected_action == "respond":
                 visible = test_case.actual_output or ""
                 user_tool = any(call.name == "send_message_to_user" for call in test_case.tools_called or [])
                 if not visible and not user_tool:
@@ -291,22 +329,33 @@ class InstructionFidelityMetric(BaseMetric):
         states: dict[str, dict[str, Any]] = {}
         remaining = list(actual)
         question_index = 0
-        for item in expected:
+        ordered_expected = sorted(
+            expected,
+            key=lambda item: item.get("max_calls", 1) != 1,
+        )
+        for item in ordered_expected:
             route = item["route"]
             names = set(item.get("acceptable_agent_names") or [])
-            match = next(
-                (
-                    call
-                    for call in remaining
-                    if _route(call) == route and (route == "create" or _agent_name(call) in names)
-                ),
-                None,
-            )
-            if match is None:
+            candidates = [
+                call
+                for call in remaining
+                if _route(call) == route and (route == "create" or _agent_name(call) in names)
+            ]
+            maximum = item.get("max_calls", 1)
+            matches = candidates if maximum is None else candidates[: int(maximum)]
+            if not matches:
                 continue
-            remaining.remove(match)
-            instruction = str((match.input_parameters or {}).get("instructions", ""))
-            state = {"user_request": test_case.input, "delegated_instruction": instruction, "agent_name": _agent_name(match)}
+            for match in matches:
+                remaining.remove(match)
+            instructions = [
+                str((match.input_parameters or {}).get("instructions", ""))
+                for match in matches
+            ]
+            state = {
+                "user_request": test_case.input,
+                "delegated_instructions": instructions,
+                "agent_names": [_agent_name(match) for match in matches],
+            }
             for fact in item.get("required_facts") or []:
                 key = f"required_{question_index}"
                 question_index += 1
@@ -316,6 +365,24 @@ class InstructionFidelityMetric(BaseMetric):
                     "criteria": {"true": str(fact), "false": "The requirement is missing, changed, or contradicted."},
                 }
                 states[key] = state
+            for match in matches:
+                key = f"relevance_{question_index}"
+                question_index += 1
+                questions[key] = {
+                    "type": "noul",
+                    "instructions": "Is this delegated work directly relevant to the user's request?",
+                    "criteria": {
+                        "true": "The delegated work directly contributes to the requested goal.",
+                        "false": "The delegated work is unrelated or adds an unrequested goal.",
+                    },
+                }
+                states[key] = {
+                    "user_request": test_case.input,
+                    "delegated_instruction": str(
+                        (match.input_parameters or {}).get("instructions", "")
+                    ),
+                    "agent_name": _agent_name(match),
+                }
             for fact in item.get("forbidden_facts") or []:
                 key = f"forbidden_{question_index}"
                 question_index += 1
