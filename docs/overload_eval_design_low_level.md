@@ -43,7 +43,9 @@ Single-turn and multi-turn cases use the same structure. Multi-turn cases simply
 
 Cases encode only behavior required by the current interaction prompt and tools. Unimplemented product policies are not executable eval expectations.
 
-Normal semantic cases remain hand-written and readable. Separate helper functions create overload variants by adding unrelated agents, similar agents, changing roster order, or changing the target agent's position.
+Normal semantic cases remain hand-written and readable. Separate helper functions create exact-size overload variants from deterministic realistic task pools. Similar-agent variants hold total roster size fixed while changing semantic-neighbor density. Position and shuffle variants reuse those dense rosters.
+
+Every generated case is structurally validated, preserves the authored target and expectation, uses unique agent names, and records roster size, neighbor density, and random seed in its name or tags.
 
 ### Files
 

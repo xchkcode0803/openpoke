@@ -9,7 +9,14 @@ import os
 import pytest
 from deepeval import assert_test
 
-from .cases import DEVELOPMENT_CASES, add_unrelated_agents, full_cases, smoke_cases, standard_cases
+from .cases import (
+    DEVELOPMENT_CASES,
+    add_similar_agents,
+    full_cases,
+    scale_roster_with_unrelated_agents,
+    smoke_cases,
+    standard_cases,
+)
 from .harness import run_case
 from .metrics import InstructionFidelityMetric, RoutingCorrectnessMetric
 
@@ -43,10 +50,21 @@ def test_harness_runs_real_reuse_path(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_generated_roster_is_reproducible() -> None:
     case = next(item for item in DEVELOPMENT_CASES if item.name == "reuses_existing_hotel_search_agent")
-    first = add_unrelated_agents(case, 20, 7)
-    second = add_unrelated_agents(case, 20, 7)
+    first = scale_roster_with_unrelated_agents(case, 20, 7)
+    second = scale_roster_with_unrelated_agents(case, 20, 7)
     assert first.initial_agents == second.initial_agents
+    assert len(first.initial_agents) == 20
     assert "Montreal Hotel Search" in first.initial_agents
+    assert not any("Related Thread" in name for name in first.initial_agents)
+
+
+def test_similar_density_variant_is_fixed_size_and_realistic() -> None:
+    case = next(item for item in DEVELOPMENT_CASES if item.name == "reuses_existing_hotel_search_agent")
+    variant = add_similar_agents(case, "Montreal Hotel Search", 25, 17, total_size=100)
+    assert len(variant.initial_agents) == 100
+    assert "Montreal Hotel Search" in variant.initial_agents
+    assert any("Montreal Hotel" in name and name != "Montreal Hotel Search" for name in variant.initial_agents)
+    assert "similar_count_25" in variant.tags
 
 
 def test_harness_uses_evaluation_data_directory() -> None:

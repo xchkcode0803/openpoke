@@ -53,7 +53,11 @@ Repeat representative core and confusing-choice cases while increasing:
 - Number of irrelevant agents.
 - Number of similar agents.
 
+Roster-size values describe the exact final roster size. Unrelated growth uses realistic personal-assistant tasks. Similar-agent density uses realistic same-entity/different-task and same-task/different-entity histories whose names remain distinguishable from the true owner.
+
 When adding distractors, the underlying request and correct routing decision stay unchanged.
+
+Target-position and shuffle cases operate on dense 500-agent rosters rather than small authored rosters.
 
 Separately, increase the number of requested tasks and required agents to test complete routing under overload. These scenarios change both the request and the expected delegations.
 

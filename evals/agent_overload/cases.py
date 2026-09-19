@@ -342,6 +342,12 @@ def validate_cases(cases: tuple[RoutingCase, ...]) -> None:
             for expected in turn.delegations:
                 if expected.route == "reuse" and not (expected.acceptable_agent_names or expected.agent_from_task):
                     raise ValueError(f"reuse expectation has no target: {case.name}")
+                if expected.route == "reuse" and not expected.agent_from_task:
+                    missing = set(expected.acceptable_agent_names) - set(case.initial_agents)
+                    if missing:
+                        raise ValueError(
+                            f"reuse targets are absent from roster in {case.name}: {sorted(missing)}"
+                        )
                 if expected.route == "create":
                     created_tasks.add(expected.task_key)
                 if expected.agent_from_task and expected.agent_from_task not in created_tasks:
@@ -358,33 +364,144 @@ def validate_cases(cases: tuple[RoutingCase, ...]) -> None:
                 raise ValueError(f"only one flexible delegation group is allowed: {case.name}")
 
 
-def add_unrelated_agents(case: RoutingCase, count: int, seed: int) -> RoutingCase:
+_UNRELATED_TASKS = (
+    "Renew Library Card",
+    "Cancel Gym Membership",
+    "Schedule Dentist Appointment",
+    "Find Electricity Receipt",
+    "Compare Coffee Grinders",
+    "Replace Apartment Air Filter",
+    "Review Mobile Phone Plan",
+    "Refill Prescription",
+    "Update Car Insurance",
+    "Repair Laptop",
+    "Order Plant Delivery",
+    "Track Package Delivery",
+    "Organize Tax Documents",
+    "Compare Standing Desks",
+    "Schedule Annual Eye Exam",
+    "Return Running Shoes",
+    "Review Streaming Subscriptions",
+    "Book Haircut",
+    "Prepare Grocery List",
+    "Replace Smoke Detector",
+    "Check Water Bill",
+    "Service Bicycle",
+    "Arrange Pet Vaccination",
+    "Review Bank Fees",
+)
+
+_TASK_QUALIFIERS = tuple(
+    [f"{month} {year}" for year in range(2024, 2028) for month in (
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    )]
+    + ["for Jordan", "for Elena", "for Parents", "for Apartment 2B"]
+)
+
+_HOTEL_NEIGHBOR_TASKS = (
+    "Cancel Montreal Hotel Reservation",
+    "Request Montreal Hotel Refund",
+    "Find Montreal Hotel Receipt",
+    "Review Montreal Hotel Charges",
+    "Resolve Montreal Hotel Complaint",
+    "Change Montreal Hotel Dates",
+    "Check Montreal Hotel Loyalty Points",
+    "Arrange Montreal Hotel Accessibility",
+    "Coordinate Montreal Hotel Group Booking",
+    "Request Montreal Hotel Invoice",
+    "Toronto Hotel Search",
+    "Quebec City Hotel Search",
+    "Boston Hotel Search",
+    "Ottawa Hotel Search",
+    "Chicago Hotel Search",
+)
+
+_MAYA_NEIGHBOR_TASKS = (
+    "Email Maya About Apartment",
+    "Maya Birthday Gift",
+    "Maya Conference Travel",
+    "Maya Dinner Receipt",
+    "Maya Dinner Photos",
+    "Cancel Maya Restaurant Reservation",
+    "Maya Dietary Preferences",
+    "Maya Lunch Coordination",
+    "Maya Birthday Cake",
+    "Maya Event Invitations",
+    "Maya Expense Reimbursement",
+    "Maya Project Follow-up",
+)
+
+
+def _unrelated_candidates() -> list[str]:
+    return [f"{task} — {qualifier}" for task in _UNRELATED_TASKS for qualifier in _TASK_QUALIFIERS]
+
+
+def _similar_candidates(target_name: str) -> list[str]:
+    if target_name == "Montreal Hotel Search":
+        tasks = _HOTEL_NEIGHBOR_TASKS
+    elif target_name == "Maya Birthday Dinner":
+        tasks = _MAYA_NEIGHBOR_TASKS
+    else:
+        raise ValueError(f"no realistic neighbor pool for target: {target_name}")
+    return [f"{task} — {qualifier}" for task in tasks for qualifier in _TASK_QUALIFIERS]
+
+
+def scale_roster_with_unrelated_agents(case: RoutingCase, total_size: int, seed: int) -> RoutingCase:
+    if total_size < len(case.initial_agents):
+        raise ValueError("total roster size cannot be smaller than the authored roster")
     rng = Random(seed)
-    topics = ("Library Card", "Coffee Grinder", "Eye Exam", "Streaming Subscription", "Air Filter", "Carry On Luggage", "Birthday Cake", "Plant Delivery")
-    candidates = [f"{topic} Follow-up {index:04d}" for topic in topics for index in range(1, 1000)]
+    candidates = _unrelated_candidates()
     rng.shuffle(candidates)
     available = [name for name in candidates if name not in case.initial_agents]
+    needed = total_size - len(case.initial_agents)
+    if len(available) < needed:
+        raise ValueError(f"not enough unrelated agents for roster size {total_size}")
     return replace(
         case,
-        name=f"{case.name}__unrelated_{count}_seed_{seed}",
-        initial_agents=case.initial_agents + tuple(available[:count]),
-        tags=case.tags | frozenset({"overload"}),
+        name=f"{case.name}__roster_{total_size}_unrelated_seed_{seed}",
+        initial_agents=case.initial_agents + tuple(available[:needed]),
+        tags=case.tags | frozenset({"overload", f"roster_size_{total_size}", "unrelated_growth"}),
     )
 
 
-def add_similar_agents(case: RoutingCase, target_name: str, count: int, seed: int) -> RoutingCase:
+def add_similar_agents(
+    case: RoutingCase,
+    target_name: str,
+    count: int,
+    seed: int,
+    total_size: int = 500,
+) -> RoutingCase:
+    if target_name not in case.initial_agents:
+        raise ValueError(f"target is absent from roster: {target_name}")
+    if count > total_size - len(case.initial_agents):
+        raise ValueError("similar-agent count does not fit in requested roster size")
     rng = Random(seed)
-    candidates = [f"{target_name} Related Thread {index:04d}" for index in range(1, count + 1)]
-    rng.shuffle(candidates)
+    similar = _similar_candidates(target_name)
+    rng.shuffle(similar)
+    selected_similar = [name for name in similar if name not in case.initial_agents][:count]
+    if len(selected_similar) < count:
+        raise ValueError(f"not enough similar agents for density {count}")
+    unrelated = _unrelated_candidates()
+    rng.shuffle(unrelated)
+    used = set(case.initial_agents) | set(selected_similar)
+    unrelated_needed = total_size - len(case.initial_agents) - len(selected_similar)
+    selected_unrelated = [name for name in unrelated if name not in used][:unrelated_needed]
+    if len(selected_unrelated) < unrelated_needed:
+        raise ValueError(f"not enough filler agents for roster size {total_size}")
     return replace(
         case,
-        name=f"{case.name}__similar_{count}_seed_{seed}",
-        initial_agents=case.initial_agents + tuple(candidates),
-        tags=case.tags | frozenset({"overload", "similar_agents"}),
+        name=f"{case.name}__roster_{total_size}_similar_{count}_seed_{seed}",
+        initial_agents=case.initial_agents + tuple(selected_similar) + tuple(selected_unrelated),
+        tags=case.tags | frozenset({
+            "overload", "similar_agents", f"roster_size_{total_size}", f"similar_count_{count}",
+        }),
     )
 
 
 def move_target_agent(case: RoutingCase, target_name: str, position: Literal["first", "middle", "last"]) -> RoutingCase:
+    if target_name not in case.initial_agents:
+        raise ValueError(f"target is absent from roster: {target_name}")
     agents = [name for name in case.initial_agents if name != target_name]
     if position == "first":
         agents.insert(0, target_name)
@@ -433,10 +550,12 @@ def smoke_cases() -> tuple[RoutingCase, ...]:
         "routes_existing_and_new_task",
     }
     authored = tuple(case for case in DEVELOPMENT_CASES if case.name in names)
-    return authored + (
-        add_unrelated_agents(_named_case("reuses_existing_hotel_search_agent"), 100, 11),
-        add_unrelated_agents(_named_case("creates_related_agents_when_existing_travel_agents_do_not_fit"), 100, 13),
+    result = authored + (
+        scale_roster_with_unrelated_agents(_named_case("reuses_existing_hotel_search_agent"), 100, 11),
+        scale_roster_with_unrelated_agents(_named_case("creates_related_agents_when_existing_travel_agents_do_not_fit"), 100, 13),
     )
+    validate_cases(result)
+    return result
 
 
 def standard_cases() -> tuple[RoutingCase, ...]:
@@ -446,7 +565,12 @@ def standard_cases() -> tuple[RoutingCase, ...]:
         _named_case("uses_conversation_to_resolve_pronoun"),
         _named_case("routes_two_existing_tasks") if any(case.name == "routes_two_existing_tasks" for case in DEVELOPMENT_CASES) else _named_case("selects_agent_from_unrelated_roster"),
     )
-    return DEVELOPMENT_CASES + tuple(add_unrelated_agents(case, 100, 20 + index) for index, case in enumerate(representative))
+    result = DEVELOPMENT_CASES + tuple(
+        scale_roster_with_unrelated_agents(case, 100, 20 + index)
+        for index, case in enumerate(representative)
+    )
+    validate_cases(result)
+    return result
 
 
 def full_cases() -> tuple[RoutingCase, ...]:
@@ -457,17 +581,21 @@ def full_cases() -> tuple[RoutingCase, ...]:
     variants: list[RoutingCase] = []
     for seed_index, seed_case in enumerate((reuse_seed, create_seed, context_seed, confusing_seed)):
         for size in (10, 50, 100, 250, 500, 1000):
-            variants.append(add_unrelated_agents(seed_case, size, 100 + seed_index * 10 + size))
+            variants.append(scale_roster_with_unrelated_agents(seed_case, size, 100 + seed_index * 10 + size))
     for count in (5, 25, 100, 250):
         variants.append(add_similar_agents(reuse_seed, "Montreal Hotel Search", count, 200 + count))
         variants.append(add_similar_agents(confusing_seed, "Maya Birthday Dinner", count, 300 + count))
+    hard_reuse = add_similar_agents(reuse_seed, "Montreal Hotel Search", 100, 501)
+    hard_confusing = add_similar_agents(confusing_seed, "Maya Birthday Dinner", 100, 503)
     for position in ("first", "middle", "last"):
-        variants.append(move_target_agent(reuse_seed, "Montreal Hotel Search", position))
-        variants.append(move_target_agent(confusing_seed, "Maya Birthday Dinner", position))
+        variants.append(move_target_agent(hard_reuse, "Montreal Hotel Search", position))
+        variants.append(move_target_agent(hard_confusing, "Maya Birthday Dinner", position))
     for seed in (401, 402, 403):
-        variants.append(shuffle_roster(reuse_seed, seed))
-        variants.append(shuffle_roster(confusing_seed, seed))
-    return all_cases() + tuple(variants)
+        variants.append(shuffle_roster(hard_reuse, seed))
+        variants.append(shuffle_roster(hard_confusing, seed))
+    result = all_cases() + tuple(variants)
+    validate_cases(result)
+    return result
 
 
 validate_cases(all_cases())
