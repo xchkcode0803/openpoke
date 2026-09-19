@@ -192,7 +192,7 @@ async def run_case(case: RoutingCase) -> list[LLMTestCase]:
     _seed_case(case, roster, conversation, working_memory)
     settings = SimpleNamespace(
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
-        interaction_agent_model="anthropic/claude-sonnet-4",
+        interaction_agent_model="anthropic/claude-sonnet-5",
         summarization_enabled=bool(case.initial_summary),
     )
     batch_manager = _StubBatchManager()
