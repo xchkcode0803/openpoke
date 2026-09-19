@@ -24,6 +24,7 @@ yarn-error.log*
 .venv/
 __pycache__/
 *.pyc
+.deepeval/
 
 # Database files
 *.db
@@ -44,3 +45,4 @@ server/venv/
 # Generated documentation / analysis artifacts
 server/repomix-output.txt
 server/plans/
+evals/results/

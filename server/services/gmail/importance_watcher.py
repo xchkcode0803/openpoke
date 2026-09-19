@@ -12,6 +12,7 @@ from .processing import EmailTextCleaner, ProcessedEmail, parse_gmail_fetch_resp
 from .seen_store import GmailSeenStore
 from .importance_classifier import classify_email_importance
 from ...logging_config import logger
+from ...data_paths import resolve_data_dir
 from ...utils.timezones import convert_to_user_timezone
 
 
@@ -31,7 +32,7 @@ DEFAULT_MAX_RESULTS = 50
 DEFAULT_SEEN_LIMIT = 300
 
 
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+_DATA_DIR = resolve_data_dir(Path(__file__).resolve().parent.parent.parent / "data")
 _DEFAULT_SEEN_PATH = _DATA_DIR / "gmail_seen.json"
 
 

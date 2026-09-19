@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Tuple
 
 from ...logging_config import logger
+from ...data_paths import resolve_data_dir
 from ...utils.timezones import now_in_user_timezone
 
 
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+_DATA_DIR = resolve_data_dir(Path(__file__).resolve().parent.parent.parent / "data")
 _EXECUTION_LOG_DIR = _DATA_DIR / "execution_agents"
 
 
