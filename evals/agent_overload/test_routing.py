@@ -130,16 +130,16 @@ def test_missing_created_agent_dependency_is_recorded(monkeypatch: pytest.Monkey
     assert "required prior agent was not created" in metric.reason
 
 
-def _evaluate_live_case(case) -> None:
+def _evaluate_live_case(case, history=None) -> None:
     from unittest.mock import patch
     from .provider import MODEL, context_limits, verify_context_limit, interaction_completion, save_result
     if "stress" in case.tags and MODEL not in context_limits:
         asyncio.run(verify_context_limit(MODEL))
     with patch("server.agents.interaction_agent.runtime.request_chat_completion", interaction_completion):
-        results = asyncio.run(run_case(case))
+        results = asyncio.run(run_case(case, history))
     failures = []
     for result in results:
-        if result.metadata.get("failure_kind"):
+        if result.metadata.get("failure_kind") in {"provider", "capacity", "harness"}:
             save_result("unavailable.jsonl", result.model_dump(mode="json"))
             failures.append(f"{result.name}: unavailable ({result.metadata['failure_kind']})")
             continue

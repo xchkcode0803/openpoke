@@ -10,6 +10,7 @@ Inspect AI was considered but its solver model requires more adaptation around t
 
 - `cases.py`: frozen case/turn/delegation dataclasses, authored cases, generators, and suite selection.
 - `stress_cases.py`: explicit stress fixtures and deterministic nested roster generation.
+- `inspection_cases.py`: six additional history-based scenarios and separately seeded execution histories; excluded from standard/full.
 - `harness.py`: temporary services, worker stub, real runtime execution, tool/model recording.
 - `metrics.py`: deterministic matching and Jev/Sonnet semantic grading.
 - `provider.py`: pinned eval model, scoped HTTP requests, pacing/retries, context metadata, and run artifacts.
@@ -26,6 +27,8 @@ Disable summarization scheduling and replace execution dispatch with a recording
 
 A scenario has a DeepEval trace with model/tool spans. Saved per-turn records include system prompt, messages, responses, tool calls, token usage, reported cost, and runtime. Every turn is evaluated even if another turn fails.
 
+Discovery tools use the same isolated stores. Traces retain each request's available tool schemas, search results, inspection excerpts, discovery counts, and budget closure reason. Failed model requests are retained even when usage is unavailable. An overall agent iteration-limit failure is graded as a behavioral failure, not an unavailable provider result. See [agent roster search](agent_roster_search.md) for the runtime and testing design.
+
 ## Grading and providers
 
 Routing expectations match each actual delegation at most once. Exact groups expect one call; one optional flexible group supports related parallel work. Missing dynamic owners produce failed dependencies rather than exceptions.
@@ -34,7 +37,9 @@ Jev uses typesafe/jev-1.13 and falls back to the central Sonnet 4 model for unce
 
 Interaction and judge calls share a 4.1-second request interval and up to three retries on HTTP 429, honoring Retry-After. Only eval calls use this transport; HTTP behavior is not globally patched. Execution is sequential, not parallel-safe.
 
-For stress cases, fetch the configured model's context limit. Estimate serialized prompt input at three UTF-8 bytes per token with an 8,192-token reserve. This estimate is not an exact tokenizer count or a provider guarantee. Never truncate the roster. Record capacity/provider failures separately.
+For stress cases, fetch the configured model's context limit. Estimate serialized prompt input at three UTF-8 bytes per token with an 8,192-token reserve. This estimate is not an exact tokenizer count or a provider guarantee. Preserve the complete fixture roster; the runtime determines what is exposed in the prompt or through tools. Record capacity/provider failures separately.
+
+New interaction responses include HTTP request duration across attempts, pacing, and retry waits. Historical artifacts do not isolate these durations. Discovery costs are included in interaction usage; judge charges remain separate.
 
 Each process writes to a unique directory under `.deepeval/runs/`: completed turns, unavailable turns, judge errors, and judge usage. DeepEval also maintains its own latest result. Preserve baseline artifacts before subsequent evaluations replace that latest file.
 

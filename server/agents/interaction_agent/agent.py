@@ -1,6 +1,5 @@
 """Interaction agent helpers for prompt construction."""
 
-from html import escape
 from pathlib import Path
 from typing import Dict, List
 
@@ -16,17 +15,17 @@ def build_system_prompt() -> str:
     return SYSTEM_PROMPT
 
 
-# Build structured message with conversation history, active agents, and current turn
+# Build structured message with conversation history, roster count, and current turn
 def prepare_message_with_history(
     latest_text: str,
     transcript: str,
     message_type: str = "user",
 ) -> List[Dict[str, str]]:
-    """Compose a message that bundles history, roster, and the latest turn."""
+    """Compose a message with history, roster count, and the latest turn."""
     sections: List[str] = []
 
     sections.append(_render_conversation_history(transcript))
-    sections.append(f"<active_agents>\n{_render_active_agents()}\n</active_agents>")
+    sections.append(f"<agent_roster count=\"{_agent_count()}\" />")
     sections.append(_render_current_turn(latest_text, message_type))
 
     content = "\n\n".join(sections)
@@ -41,21 +40,11 @@ def _render_conversation_history(transcript: str) -> str:
     return f"<conversation_history>\n{history}\n</conversation_history>"
 
 
-# Format currently active execution agents into XML tags for LLM awareness
-def _render_active_agents() -> str:
+# Read the roster count without adding all names to model context.
+def _agent_count() -> int:
     roster = get_agent_roster()
     roster.load()
-    agents = roster.get_agents()
-
-    if not agents:
-        return "None"
-
-    rendered: List[str] = []
-    for agent_name in agents:
-        name = escape(agent_name or "agent", quote=True)
-        rendered.append(f'<agent name="{name}" />')
-
-    return "\n".join(rendered)
+    return len(roster.get_agents())
 
 
 # Wrap the current message in appropriate XML tags based on sender type

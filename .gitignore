@@ -25,6 +25,9 @@ yarn-error.log*
 __pycache__/
 *.pyc
 .deepeval/
+.coverage
+coverage.json
+htmlcov/
 
 # Database files
 *.db
