@@ -7,7 +7,8 @@ import json
 import os
 import tempfile
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
+from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -16,10 +17,7 @@ from deepeval.test_case import LLMTestCase, ToolCall
 from deepeval.tracing import observe, trace, update_current_span, update_current_trace
 
 from .cases import ExpectedDelegation, RoutingCase
-
-
-_EVAL_DATA_DIR = Path(tempfile.mkdtemp(prefix="openpoke-agent-overload-"))
-os.environ["OPENPOKE_DATA_DIR"] = str(_EVAL_DATA_DIR)
+from .provider import MODEL, context_limits, failure_kind
 
 
 @dataclass
@@ -51,7 +49,7 @@ def _usage(response: dict[str, Any]) -> tuple[int | None, int | None, float | No
 
 
 class _TracingInteractionRuntime:
-    """A thin subclass that retains the real loop while recording its boundaries."""
+    """Record model and tool boundaries around an unchanged runtime instance."""
 
     def __init__(self, runtime_type: type[Any]) -> None:
         self._runtime = runtime_type()
@@ -61,11 +59,20 @@ class _TracingInteractionRuntime:
         self.cost = 0.0
         self.has_cost = False
         self.model_latency = 0.0
+        self.prompt_estimates = []
+        self.model_calls = []
         original_make_call = self._runtime._make_llm_call
         original_execute_tool = self._runtime._execute_tool
 
         @observe(type="llm")
         async def recorded_make_call(system_prompt: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
+            if self._runtime.model in context_limits:
+                prompt = json.dumps({"system": system_prompt, "messages": messages, "tools": self._runtime.tool_schemas}, ensure_ascii=False)
+                estimate = len(prompt.encode("utf-8")) // 3 + 1
+                limit = context_limits[self._runtime.model]
+                self.prompt_estimates.append({"estimated_input_tokens": estimate, "context_limit": limit, "output_reserve": 8192})
+                if estimate + 8192 > limit:
+                    raise RuntimeError(f"capacity limit: estimated {estimate} input tokens plus 8192 reserve exceeds {limit}")
             started = time.perf_counter()
             response = await original_make_call(system_prompt, messages)
             elapsed = time.perf_counter() - started
@@ -76,8 +83,9 @@ class _TracingInteractionRuntime:
                 self.cost += cost
                 self.has_cost = True
             self.model_latency += elapsed
+            self.model_calls.append({"system": system_prompt, "messages": json.loads(json.dumps(messages)), "response": response, "elapsed_seconds": elapsed})
             update_current_span(
-                input=json.dumps(messages, default=str),
+                input=json.dumps({"system": system_prompt, "messages": messages, "tools": self._runtime.tool_schemas}, default=str),
                 output=json.dumps(response, default=str),
                 name="interaction_model_call",
             )
@@ -166,8 +174,9 @@ def _reset_services(root: Path) -> tuple[Any, Any, Any, Any]:
 
 def _seed_case(case: RoutingCase, roster: Any, conversation: Any, working_memory: Any) -> None:
     roster.clear()
-    for name in case.initial_agents:
-        roster.add_agent(name)
+    # Avoid 10,000 full-file rewrites while constructing an isolated fixture.
+    roster._agents = list(case.initial_agents)
+    roster.save()
     conversation.clear()
     if case.initial_summary:
         state = working_memory.load_summary_state()
@@ -188,6 +197,13 @@ def _seed_case(case: RoutingCase, roster: Any, conversation: Any, working_memory
 
 async def run_case(case: RoutingCase) -> list[LLMTestCase]:
     """Execute one case and return one DeepEval test case per routing turn."""
+    from unittest.mock import patch
+    with tempfile.TemporaryDirectory(prefix="openpoke-agent-overload-") as directory:
+        with patch.dict(os.environ, {"OPENPOKE_DATA_DIR": directory}):
+            return await _run_isolated_case(case, Path(directory))
+
+
+async def _run_isolated_case(case: RoutingCase, root: Path) -> list[LLMTestCase]:
 
     from unittest.mock import patch
 
@@ -195,12 +211,11 @@ async def run_case(case: RoutingCase) -> list[LLMTestCase]:
     import server.agents.interaction_agent.runtime as runtime_module
     import server.agents.interaction_agent.tools as tools_module
 
-    root = _EVAL_DATA_DIR / case.name
     roster, conversation, working_memory, execution_logs = _reset_services(root)
     _seed_case(case, roster, conversation, working_memory)
     settings = SimpleNamespace(
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
-        interaction_agent_model="anthropic/claude-sonnet-5",
+        interaction_agent_model=MODEL,
         summarization_enabled=bool(case.initial_summary),
     )
     batch_manager = _StubBatchManager()
@@ -219,7 +234,9 @@ async def run_case(case: RoutingCase) -> list[LLMTestCase]:
     )
 
     with trace(name=case.name, tags=sorted(case.tags), metadata={"case": case.name}):
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7]:
+        with ExitStack() as stack:
+            for service_patch in patches:
+                stack.enter_context(service_patch)
             runtime = _TracingInteractionRuntime(runtime_module.InteractionAgentRuntime)
             for index, turn in enumerate(case.turns):
                 roster_before = roster.get_agents()
@@ -230,6 +247,8 @@ async def run_case(case: RoutingCase) -> list[LLMTestCase]:
                 runtime.has_cost = False
                 runtime.model_latency = 0.0
                 started = time.perf_counter()
+                runtime.prompt_estimates = []
+                runtime.model_calls = []
                 result = await (
                     runtime.execute(turn.message)
                     if turn.source == "user"
@@ -269,6 +288,11 @@ async def run_case(case: RoutingCase) -> list[LLMTestCase]:
                     "worker_dispatches": batch_manager.calls[:],
                     "runtime_success": result.success,
                     "runtime_error": result.error,
+                    "failure_kind": failure_kind(result.error),
+                    "prompt_estimates": runtime.prompt_estimates[:],
+                    "model_calls": runtime.model_calls[:],
+                    "model_call_seconds_including_pacing": runtime.model_latency,
+                    "conversation_context": case.initial_conversation,
                 }
                 test_case = LLMTestCase(
                     name=f"{case.name}[{index}]",

@@ -46,6 +46,26 @@ def test_deterministic_grader_accepts_matching_reuse() -> None:
     assert metric.measure(_routing_case()) == 1.0
 
 
+@pytest.mark.parametrize("acknowledgement", ["before", "after", "absent"])
+def test_grading_does_not_depend_on_acknowledgement(acknowledgement):
+    case = _routing_case()
+    if acknowledgement == "after":
+        case.tools_called.reverse()
+    elif acknowledgement == "absent":
+        case.tools_called = [call for call in case.tools_called if call.name != "send_message_to_user"]
+        case.actual_output = ""
+    assert RoutingCorrectnessMetric().measure(case) == 1.0
+    semantic = InstructionFidelityMetric(_FakeJev(0.95), _FakeFallback(False))
+    assert semantic.measure(case) == 1.0
+    case.tools_called = [call for call in case.tools_called if call.name != "send_message_to_agent"]
+    assert RoutingCorrectnessMetric().measure(case) == 0.0
+
+
+def test_response_case_still_requires_visible_response():
+    case = LLMTestCase(input="Thanks", actual_output="", tools_called=[], metadata={"expected_action": "respond"})
+    assert RoutingCorrectnessMetric().measure(case) == 0.0
+
+
 def test_deterministic_grader_rejects_wrong_agent() -> None:
     metric = RoutingCorrectnessMetric()
     assert metric.measure(_routing_case(agent_name="Toronto Hotel Search")) == 0.0
@@ -163,6 +183,7 @@ def test_semantic_grader_uses_fallback_for_uncertain_answer() -> None:
     metric = InstructionFidelityMetric(_FakeJev(0.5), fallback)
     assert asyncio.run(metric.a_measure(_semantic_case("Draft the repair-date follow-up."))) == 1.0
     assert fallback.calls == 4
+    assert all(item["probability"] == 0.5 and item["fallback_used"] for item in metric.score_breakdown.values())
 
 
 @pytest.mark.live

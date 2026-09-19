@@ -19,6 +19,7 @@ from .cases import (
 )
 from .harness import run_case
 from .metrics import InstructionFidelityMetric, RoutingCorrectnessMetric
+from .stress_cases import stress_cases
 
 
 def _tool_call(identifier: str, name: str, arguments: dict) -> dict:
@@ -46,6 +47,38 @@ def test_harness_runs_real_reuse_path(monkeypatch: pytest.MonkeyPatch) -> None:
     assert metric.measure(results[0]) == 1.0
     assert_test(results[0], metrics=[RoutingCorrectnessMetric()], run_async=False)
     assert any(call.name == "send_message_to_agent" for call in results[0].tools_called)
+    assert results[0].metadata["worker_dispatches"]
+    assert results[0].metadata["model_calls"][0]["system"]
+
+
+def test_environment_and_temporary_state_restored(monkeypatch):
+    from pathlib import Path
+    import server.agents.interaction_agent.runtime as runtime_module
+    original = os.environ.get("OPENPOKE_DATA_DIR")
+    directories = []
+
+    async def completion(*args, **kwargs):
+        directories.append(Path(os.environ["OPENPOKE_DATA_DIR"]))
+        return await _scripted_completion(*args, **kwargs)
+
+    monkeypatch.setattr(runtime_module, "request_chat_completion", completion)
+    asyncio.run(run_case(DEVELOPMENT_CASES[1]))
+    assert os.environ.get("OPENPOKE_DATA_DIR") == original
+    assert directories and all(not path.exists() for path in directories)
+
+
+def test_suite_membership_and_frozen_cases():
+    import hashlib
+    from dataclasses import asdict
+    cases = full_cases() + stress_cases()
+    digest = hashlib.sha256(json.dumps([asdict(case) for case in cases], default=lambda value: sorted(value), sort_keys=True).encode()).hexdigest()
+    assert digest == "f466df1ae88422eb3a2357d0cc6d913918e56c87128a4725aa31062cacac68fd"
+    parameters = suite_parameters()
+    assert len({parameter.id for parameter in parameters}) == len(parameters)
+    assert sum(any(mark.name == "full" for mark in p.marks) for p in parameters) == 99
+    assert sum(any(mark.name == "smoke" for mark in p.marks) for p in parameters) == 12
+    assert sum(any(mark.name == "standard" for mark in p.marks) for p in parameters) == 29
+    assert sum(any(mark.name == "stress" for mark in p.marks) for p in parameters) == 24
 
 
 def test_generated_roster_is_reproducible() -> None:
@@ -67,14 +100,14 @@ def test_similar_density_variant_is_fixed_size_and_realistic() -> None:
     assert "similar_count_25" in variant.tags
 
 
-def test_harness_uses_evaluation_data_directory() -> None:
-    from .harness import _EVAL_DATA_DIR, _reset_services
+def test_harness_uses_evaluation_data_directory(tmp_path) -> None:
+    from .harness import _reset_services
 
-    roster, conversation, working_memory, execution_logs = _reset_services(_EVAL_DATA_DIR / "isolation-check")
-    assert str(roster._roster_path).startswith(str(_EVAL_DATA_DIR))
-    assert str(conversation._path).startswith(str(_EVAL_DATA_DIR))
-    assert str(working_memory._path).startswith(str(_EVAL_DATA_DIR))
-    assert str(execution_logs._base_dir).startswith(str(_EVAL_DATA_DIR))
+    roster, conversation, working_memory, execution_logs = _reset_services(tmp_path)
+    assert roster._roster_path.is_relative_to(tmp_path)
+    assert conversation._path.is_relative_to(tmp_path)
+    assert working_memory._path.is_relative_to(tmp_path)
+    assert execution_logs._base_dir.is_relative_to(tmp_path)
 
 
 def test_missing_created_agent_dependency_is_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -98,36 +131,54 @@ def test_missing_created_agent_dependency_is_recorded(monkeypatch: pytest.Monkey
 
 
 def _evaluate_live_case(case) -> None:
-    results = asyncio.run(run_case(case))
+    from unittest.mock import patch
+    from .provider import MODEL, context_limits, verify_context_limit, interaction_completion, save_result
+    if "stress" in case.tags and MODEL not in context_limits:
+        asyncio.run(verify_context_limit(MODEL))
+    with patch("server.agents.interaction_agent.runtime.request_chat_completion", interaction_completion):
+        results = asyncio.run(run_case(case))
+    failures = []
     for result in results:
+        if result.metadata.get("failure_kind"):
+            save_result("unavailable.jsonl", result.model_dump(mode="json"))
+            failures.append(f"{result.name}: unavailable ({result.metadata['failure_kind']})")
+            continue
         metrics = [RoutingCorrectnessMetric()]
         if result.metadata.get("expected_delegations") or result.metadata.get("response_requirements"):
             metrics.append(InstructionFidelityMetric())
-        assert_test(result, metrics=metrics, run_async=False)
+        try:
+            assert_test(result, metrics=metrics, run_async=False)
+        except Exception as exc:
+            if not isinstance(exc, AssertionError):
+                save_result("judge_errors.jsonl", {"case": result.name, "error": str(exc)})
+            failures.append(f"{result.name}: {exc}")
+        finally:
+            save_result("turns.jsonl", {"result": result.model_dump(mode="json"), "metrics": [
+                {"name": metric.__name__, "score": getattr(metric, "score", None),
+                 "reason": getattr(metric, "reason", None)} for metric in metrics
+            ]})
+    assert not failures, "\n".join(failures)
+
+
+def suite_parameters():
+    full = {case.name for case in full_cases() + stress_cases()}
+    smoke = {case.name for case in smoke_cases()}
+    standard = {case.name for case in standard_cases()}
+    cases = {case.name: case for case in full_cases() + stress_cases() + smoke_cases() + standard_cases()}
+    return [
+        pytest.param(case, id=case.name, marks=[
+            getattr(pytest.mark, suite) for suite, included in (
+                ("full", case.name in full), ("smoke", case.name in smoke),
+                ("standard", case.name in standard), ("stress", "stress" in case.tags)
+            ) if included
+        ])
+        for case in cases.values()
+    ]
 
 
 @pytest.mark.live
-@pytest.mark.smoke
-@pytest.mark.parametrize("case", smoke_cases(), ids=lambda item: item.name)
-def test_live_smoke_routing(case) -> None:
-    if not os.getenv("RUN_LIVE_EVALS"):
-        pytest.skip("set RUN_LIVE_EVALS=1 to call the interaction model")
-    _evaluate_live_case(case)
-
-
-@pytest.mark.live
-@pytest.mark.standard
-@pytest.mark.parametrize("case", standard_cases(), ids=lambda item: item.name)
-def test_live_standard_routing(case) -> None:
-    if not os.getenv("RUN_LIVE_EVALS"):
-        pytest.skip("set RUN_LIVE_EVALS=1 to call the interaction model")
-    _evaluate_live_case(case)
-
-
-@pytest.mark.live
-@pytest.mark.full
-@pytest.mark.parametrize("case", full_cases(), ids=lambda item: item.name)
-def test_live_full_routing(case) -> None:
+@pytest.mark.parametrize("case", suite_parameters())
+def test_live_routing(case) -> None:
     if not os.getenv("RUN_LIVE_EVALS"):
         pytest.skip("set RUN_LIVE_EVALS=1 to call the interaction model")
     _evaluate_live_case(case)

@@ -12,10 +12,11 @@ from typing import Any, Protocol
 import httpx
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase, ToolCall
+from .provider import MODEL, paced_post, save_result
 
 
 JEV_MODEL = "typesafe/jev-1.13"
-FALLBACK_MODEL = "anthropic/claude-sonnet-5"
+FALLBACK_MODEL = MODEL
 JEV_YES_THRESHOLD = 0.90
 JEV_NO_THRESHOLD = 0.10
 
@@ -73,7 +74,7 @@ class OpenRouterJevJudge:
         for _ in range(2):
             try:
                 async with httpx.AsyncClient(timeout=60.0) as client:
-                    response = await client.post(
+                    response = await paced_post(client,
                         "https://openrouter.ai/api/alpha/decisions",
                         headers={"Authorization": f"Bearer {_api_key()}", "Content-Type": "application/json"},
                         json={"model": JEV_MODEL, "state": state, "questions": questions},
@@ -87,6 +88,7 @@ class OpenRouterJevJudge:
             raise JudgeError(f"Jev request failed ({response.status_code}): {response.text}")
         payload = response.json()
         input_tokens, output_tokens, cost = _usage(payload)
+        save_result("judge_usage.jsonl", {"model": JEV_MODEL, "input_tokens": input_tokens, "output_tokens": output_tokens, "cost": cost, "latency_seconds": time.perf_counter() - started})
         answers = payload.get("answers")
         if not isinstance(answers, dict):
             raise JudgeError("Jev response did not contain answers")
@@ -138,7 +140,7 @@ class OpenRouterFallbackJudge:
         for _ in range(2):
             try:
                 async with httpx.AsyncClient(timeout=60.0) as client:
-                    response = await client.post(
+                    response = await paced_post(client,
                         "https://openrouter.ai/api/v1/chat/completions",
                         headers={"Authorization": f"Bearer {_api_key()}", "Content-Type": "application/json"},
                         json={
@@ -169,6 +171,7 @@ class OpenRouterFallbackJudge:
         if not isinstance(parsed, dict) or not isinstance(parsed.get("verdict"), bool):
             raise JudgeError("Fallback judge returned an invalid verdict")
         input_tokens, output_tokens, cost = _usage(payload)
+        save_result("judge_usage.jsonl", {"model": FALLBACK_MODEL, "input_tokens": input_tokens, "output_tokens": output_tokens, "cost": cost, "latency_seconds": time.perf_counter() - started})
         return JudgeAnswer(
             verdict=parsed["verdict"],
             probability=None,
@@ -272,17 +275,6 @@ class RoutingCorrectnessMetric(BaseMetric):
             seen = [_agent_name(call) for call in actual]
             if len(seen) != len(set(seen)):
                 failures.append("duplicate agent delegation")
-            tool_names = [call.name for call in test_case.tools_called or []]
-            first_agent = next(
-                (index for index, name in enumerate(tool_names) if name == "send_message_to_agent"),
-                None,
-            )
-            acknowledged = any(
-                name == "send_message_to_user"
-                for name in tool_names[:first_agent] if first_agent is not None
-            )
-            if first_agent is not None and not acknowledged:
-                failures.append("delegation occurred before user acknowledgement")
         else:
             if actual:
                 failures.append("delegated when no delegation was expected")
@@ -352,6 +344,7 @@ class InstructionFidelityMetric(BaseMetric):
                 for match in matches
             ]
             state = {
+                "conversation_context": metadata.get("conversation_context", []),
                 "user_request": test_case.input,
                 "delegated_instructions": instructions,
                 "agent_names": [_agent_name(match) for match in matches],
@@ -377,6 +370,7 @@ class InstructionFidelityMetric(BaseMetric):
                     },
                 }
                 states[key] = {
+                    "conversation_context": metadata.get("conversation_context", []),
                     "user_request": test_case.input,
                     "delegated_instruction": str(
                         (match.input_parameters or {}).get("instructions", "")
@@ -412,6 +406,7 @@ class InstructionFidelityMetric(BaseMetric):
             self.score_breakdown = {}
             return self.score
         answers: dict[str, JudgeAnswer] = {}
+        jev_probabilities = {}
         batched_state = {"checks": states}
         batched_questions = {
             key: {
@@ -423,6 +418,7 @@ class InstructionFidelityMetric(BaseMetric):
         response = await self.jev.evaluate(batched_state, batched_questions)
         for key, question in questions.items():
             answer = response[key]
+            jev_probabilities[key] = answer.probability
             if answer.probability is not None and JEV_NO_THRESHOLD < answer.probability < JEV_YES_THRESHOLD:
                 answer = await self.fallback.evaluate(states[key], question)
             answers[key] = answer
@@ -431,7 +427,7 @@ class InstructionFidelityMetric(BaseMetric):
         self.success = not failures
         self.reason = "semantic requirements failed: " + ", ".join(failures) if failures else "semantic requirements preserved"
         self.score_breakdown = {
-            key: {"verdict": answer.verdict, "probability": answer.probability, "fallback_used": answer.fallback_used, "reason": answer.reason}
+            key: {"verdict": answer.verdict, "probability": jev_probabilities[key], "fallback_used": answer.fallback_used, "reason": answer.reason}
             for key, answer in answers.items()
         }
         metadata = test_case.metadata if test_case.metadata is not None else {}

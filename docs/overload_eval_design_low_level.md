@@ -1,109 +1,60 @@
 # Overload Eval Design, Low Level
 
-This document translates the high-level overload evaluation design into concrete technical decisions.
+## Framework
 
-## Evaluation framework
+Use DeepEval 4.2.3 with pytest. Native test cases, tool-call records, metrics, and tracing wrap the real OpenPoke interaction loop. Custom code handles application isolation, routing expectations, and Jev decisions.
 
-### Decision
+Inspect AI was considered but its solver model requires more adaptation around the existing runtime. Promptfoo was considered but adds a Node-based runner and Python bridge. DeepEval fits this Python implementation directly.
 
-Use DeepEval as the evaluation framework, with its pytest integration as the underlying test runner.
+## Organization
 
-### Justification
+- `cases.py`: frozen case/turn/delegation dataclasses, authored cases, generators, and suite selection.
+- `stress_cases.py`: explicit stress fixtures and deterministic nested roster generation.
+- `harness.py`: temporary services, worker stub, real runtime execution, tool/model recording.
+- `metrics.py`: deterministic matching and Jev/Sonnet semantic grading.
+- `provider.py`: pinned eval model, scoped HTTP requests, pacing/retries, context metadata, and run artifacts.
+- Repository-root `conftest.py`: session import-time service isolation and cleanup, loaded before collection for both root and explicit eval invocations.
+- Test modules: one parametrized live routing entry point, offline harness/generator checks, and judge validation.
 
-DeepEval fits OpenPoke's Python backend and can evaluate the existing interaction-agent runtime without replacing its routing loop. It supports complete agent trajectories, tool-call tracing, multi-turn cases, repeated trials, pytest markers, and local result inspection.
+Suite membership is assigned from explicit suite collections, not inherited scenario tags. Shared scenarios run once when markers are combined; full contains exactly 99 scenarios.
 
-The evaluation requires mostly deterministic custom grading, with Jev and a stronger fallback model handling narrow semantic decisions. DeepEval supports custom metrics and custom evaluation models, allowing this grading stack to remain specific to OpenPoke rather than depending on generic built-in LLM metrics.
+## Isolation and execution
 
-DeepEval will manage evaluation execution, tracing, repetitions, suite selection, and result presentation. OpenPoke's evaluation code will remain responsible for case definitions, isolated state, runtime invocation, routing expectations, deterministic grading, and the Jev grading workflow.
+The pytest session sets a temporary data root before application imports and restores the previous environment at shutdown. Each scenario creates another disposable directory and patches the module-local getters used by the real interaction runtime and tools. Production defaults remain unchanged when OPENPOKE_DATA_DIR is absent.
 
-### Alternatives considered
+Disable summarization scheduling and replace execution dispatch with a recording stub. No worker results are sent back automatically. Seeded worker messages are deliberate fixture inputs. Restore patches and remove temporary directories after execution.
 
-Inspect AI was considered because it provides strong Python support for datasets, tools, multi-turn tasks, scorers, and reproducible model evaluations. Its task-and-solver abstraction is better suited to evaluating models directly and would require more adaptation around OpenPoke's existing application runtime.
+A scenario has a DeepEval trace with model/tool spans. Saved per-turn records include system prompt, messages, responses, tool calls, token usage, reported cost, and runtime. Every turn is evaluated even if another turn fails.
 
-Promptfoo was considered because it provides mature prompt comparison, Python providers, custom assertions, tracing, and a strong local interface. Its primary runtime is Node-based, and integrating OpenPoke would require a Python-provider and tracing bridge, making it less natural for this Python routing evaluation.
+## Grading and providers
 
-## Evaluation code structure
+Routing expectations match each actual delegation at most once. Exact groups expect one call; one optional flexible group supports related parallel work. Missing dynamic owners produce failed dependencies rather than exceptions.
 
-Keep the evaluation implementation small and centered around the real OpenPoke interaction runtime.
+Jev uses typesafe/jev-1.13 and falls back to the central Sonnet 4 model for uncertain answers. Retain original Jev probabilities and fallback verdicts. Log judge usage once per actual request, not once per question in a batch.
 
-### Case definitions
+Interaction and judge calls share a 4.1-second request interval and up to three retries on HTTP 429, honoring Retry-After. Only eval calls use this transport; HTTP behavior is not globally patched. Execution is sequential, not parallel-safe.
 
-Each routing case describes:
+For stress cases, fetch the configured model's context limit. Estimate serialized prompt input at three UTF-8 bytes per token with an 8,192-token reserve. This estimate is not an exact tokenizer count or a provider guarantee. Never truncate the roster. Record capacity/provider failures separately.
 
-- The execution-agent names that exist before the case starts.
-- The conversation history that exists before the next message.
-- One or more incoming user or execution-agent messages.
-- The routing behavior expected after each message.
-- Any facts or constraints that must be preserved in delegated instructions.
-- Tags identifying its suite and scenario group.
+Each process writes to a unique directory under `.deepeval/runs/`: completed turns, unavailable turns, judge errors, and judge usage. DeepEval also maintains its own latest result. Preserve baseline artifacts before subsequent evaluations replace that latest file.
 
-Each expected delegation also defines a permitted call range. Ordinary work expects exactly one matching call. Parallelizable work accepts one or more related calls and is graded on combined task coverage. Only one flexible delegation group is allowed in a turn so matching stays deterministic.
+## Commands
 
-Single-turn and multi-turn cases use the same structure. Multi-turn cases simply contain more incoming messages.
+Install: `.venv/bin/python -m pip install -r evals/requirements.txt`
 
-Cases encode only behavior required by the current interaction prompt and tools. Unimplemented product policies are not executable eval expectations.
-
-Normal semantic cases remain hand-written and readable. Separate helper functions create exact-size overload variants from deterministic realistic task pools. Similar-agent variants hold total roster size fixed while changing semantic-neighbor density. Position and shuffle variants reuse those dense rosters.
-
-Every generated case is structurally validated, preserves the authored target and expectation, uses unique agent names, and records roster size, neighbor density, and random seed in its name or tags.
-
-### Files
-
-`cases.py` contains routing cases and overload-variant helpers.
-
-`harness.py` resets the evaluation state, seeds the initial roster and conversation, runs each message through the real interaction runtime, captures the routing trace, and prevents execution agents from performing downstream work.
-
-`metrics.py` contains the deterministic routing grader, the Jev semantic grader, and the low-confidence fallback logic.
-
-`test_routing.py` is the thin pytest entry point. It selects cases, runs them through the harness, applies the graders, and asserts that they pass. It contains no routing or grading logic.
-
-`test_grader.py` validates the evaluation system itself using known semantic examples. It verifies that Jev recognizes preserved meaning, catches changed or missing constraints, and invokes the fallback when confidence is low.
-
-### DeepEval integration
-
-DeepEval manages pytest execution, suite selection, repeated runs, trace recording, metric execution, and local result inspection.
-
-The harness records each completed case as one DeepEval trace. Each turn, model call, and routing tool call is recorded inside that trace. OpenPoke-specific expectations are attached as trace metadata and evaluated by the custom metrics.
-
-The evaluation does not create a separate trace representation or reimplement OpenPoke's routing loop.
-
-### Execution flow
-
-1. Select a routing case and optional overload variant.
-2. Create isolated roster and conversation state.
-3. Run the case through the real OpenPoke interaction runtime.
-4. Record the complete run as a DeepEval trace.
-5. Apply deterministic routing checks.
-6. Apply Jev semantic checks where meaning must be evaluated.
-7. Use the stronger fallback judge for low-confidence Jev results.
-8. Return the final case result and retain the trace for debugging.
-
-## Implemented commands
-
-Install the evaluation dependencies:
-
-```bash
-.venv/bin/python -m pip install -r evals/requirements.txt
-```
-
-Run offline validation:
-
+Offline checks:
 ```bash
 .venv/bin/python -m pytest evals/agent_overload -m "not live"
 ```
 
-Run live semantic-grader validation:
-
+Live routing (replace full with smoke, standard, or stress):
 ```bash
-RUN_LIVE_EVALS=1 .venv/bin/deepeval test run \
-  evals/agent_overload/test_grader.py -m grader_live
+RUN_LIVE_EVALS=1 .venv/bin/deepeval test run evals/agent_overload/test_routing.py -m full
 ```
 
-Run the live smoke suite:
-
+Judge validation:
 ```bash
-RUN_LIVE_EVALS=1 .venv/bin/deepeval test run \
-  evals/agent_overload/test_routing.py -m smoke
+RUN_LIVE_EVALS=1 .venv/bin/deepeval test run evals/agent_overload/test_grader.py -m grader_live
 ```
 
-DeepEval saves local artifacts under `.deepeval/`, which is ignored by Git. Current OpenRouter limits can interrupt a large live suite; the resulting trace records the provider error separately from routing behavior.
+Live runs cost money. No result caching or parallel execution is requested by these commands. An assertion failure can be a legitimate baseline result; inspect the per-turn outcome before treating it as a harness defect.
