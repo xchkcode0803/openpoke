@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from ....logging_config import logger
+from ....data_paths import resolve_data_dir
 from ....utils.timezones import now_in_user_timezone
 from .state import LogEntry, SummaryState
 
 
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
+_DATA_DIR = resolve_data_dir(Path(__file__).resolve().parent.parent.parent.parent / "data")
 _WORKING_MEMORY_LOG_PATH = _DATA_DIR / "conversation" / "poke_working_memory.log"
 
 

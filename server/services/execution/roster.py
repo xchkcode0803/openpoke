@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from ...logging_config import logger
+from ...data_paths import resolve_data_dir
 
 
 class AgentRoster:
@@ -81,7 +82,7 @@ class AgentRoster:
             logger.warning(f"Failed to clear roster.json: {exc}")
 
 
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+_DATA_DIR = resolve_data_dir(Path(__file__).resolve().parent.parent.parent / "data")
 _ROSTER_PATH = _DATA_DIR / "execution_agents" / "roster.json"
 
 _agent_roster = AgentRoster(_ROSTER_PATH)

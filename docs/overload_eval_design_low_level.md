@@ -71,3 +71,33 @@ The evaluation does not create a separate trace representation or reimplement Op
 6. Apply Jev semantic checks where meaning must be evaluated.
 7. Use the stronger fallback judge for low-confidence Jev results.
 8. Return the final case result and retain the trace for debugging.
+
+## Implemented commands
+
+Install the evaluation dependencies:
+
+```bash
+.venv/bin/python -m pip install -r evals/requirements.txt
+```
+
+Run offline validation:
+
+```bash
+.venv/bin/python -m pytest evals/agent_overload -m "not live"
+```
+
+Run live semantic-grader validation:
+
+```bash
+RUN_LIVE_EVALS=1 .venv/bin/deepeval test run \
+  evals/agent_overload/test_grader.py -m grader_live
+```
+
+Run the live smoke suite:
+
+```bash
+RUN_LIVE_EVALS=1 .venv/bin/deepeval test run \
+  evals/agent_overload/test_routing.py -m smoke
+```
+
+DeepEval saves local artifacts under `.deepeval/`, which is ignored by Git. Current OpenRouter limits can interrupt a large live suite; the resulting trace records the provider error separately from routing behavior.
