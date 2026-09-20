@@ -1,5 +1,6 @@
 """Opt-in child-process supervision and artifacts for large routing fixtures."""
 import json
+import hashlib
 import os
 import platform
 import re
@@ -61,8 +62,22 @@ def supervise(command, destination, *, seconds=300, memory_limit=4 * 1024**3):
     return measurement
 
 
+def ensure_manifest(root):
+    from . import routing_population, challenge_cases
+    sources = {}
+    for module in (routing_population, challenge_cases):
+        path = Path(module.__file__)
+        sources[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    manifest = root / 'source_manifest.json'
+    if manifest.exists() and json.loads(manifest.read_text()) != sources:
+        raise ValueError('Fixture source changed; do not mix results in an existing campaign')
+    if not manifest.exists():
+        write_json(manifest, sources)
+
+
 def run_variant(variant, mode):
     root = campaign_dir()
+    ensure_manifest(root)
     destination = root / mode / variant.key
     if (destination / 'outcome.json').exists():
         return json.loads((destination / 'outcome.json').read_text())
@@ -171,11 +186,21 @@ def child(variant, mode):
     with tempfile.TemporaryDirectory(prefix='openpoke-routing-capacity-') as directory:
         with patch.dict(os.environ, {'OPENPOKE_DATA_DIR': directory}):
             try:
-                case, history, measurements = prepare(variant, Path(directory))
-                write_json(destination / 'fixture.json', measurements)
                 if mode == 'capacity':
+                    case, history, measurements = prepare(variant, Path(directory))
+                    write_json(destination / 'fixture.json', measurements)
                     write_json(destination / 'outcome.json', {'variant': variant.key, 'status': 'completed'})
                     return
+                # Preflight already exercised loading, ranking, search, and the
+                # feasible discovery path. Do not repeat that offline work before
+                # every paid run; the real runtime below still uses real stores.
+                started = time.perf_counter()
+                case, history, manifest = materialize(variant)
+                measurements = json.loads((root / 'capacity' / variant.key / 'fixture.json').read_text())
+                if any(measurements[key] != value for key, value in manifest.items()):
+                    raise ValueError('Live fixture differs from its capacity preflight')
+                measurements['live_generation_seconds'] = time.perf_counter() - started
+                write_json(destination / 'fixture.json', measurements)
                 from . import provider
                 from .campaign_budget import CampaignBudget, BudgetStopped
                 from .harness import evaluate_live_case

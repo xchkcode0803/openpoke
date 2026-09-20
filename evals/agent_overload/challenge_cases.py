@@ -70,7 +70,9 @@ def challenges():
         ('Housing Desk Elm', 'Housing Desk Ash'), 'Continue the housing request for the private balcony and ask for viewing times.', 'Housing Desk Elm',
         history={'Housing Desk Elm': (('agent_request', 'Continue the assigned housing search.'), ('agent_response', 'This housing request requires a private balcony.')) +
                     tuple(('agent_response', f'Availability check {i}: awaiting replies.') for i in range(7)),
-                 'Housing Desk Ash': (('agent_request', 'Find a ground-floor home with a shared garden; no balcony.'),)},
+                 'Housing Desk Ash': (('agent_request', 'Continue the assigned housing search.'),
+                                      ('agent_response', 'This housing request requires a shared garden, not a private balcony.'),
+                                      ('agent_request', 'Continue the assigned housing search.'))},
         conversation=(('user_message', 'One of my Housing Desk agents handles that search.'),),
         discovery=(('search_agents', {'query': 'Housing Desk'}), ('inspect_agent', {'agent_name': 'Housing Desk Elm'}),
                    ('inspect_agent', {'agent_name': 'Housing Desk Elm', 'offset': 6})),

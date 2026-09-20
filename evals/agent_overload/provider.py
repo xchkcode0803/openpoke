@@ -34,8 +34,11 @@ async def interaction_completion(*, model, messages, system=None, api_key=None, 
     payload = {"model": model, "messages": ([{"role": "system", "content": system}] if system else []) + messages, "stream": False}
     if tools:
         payload["tools"] = tools
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await paced_post(client, "https://openrouter.ai/api/v1/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json=payload)
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await paced_post(client, "https://openrouter.ai/api/v1/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json=payload)
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"OpenRouter transport error: {exc}") from exc
     if response.is_error:
         raise RuntimeError(f"OpenRouter request failed ({response.status_code}): {response.text}")
     result = response.json()

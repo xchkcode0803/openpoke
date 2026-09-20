@@ -51,6 +51,8 @@ class CampaignBudget:
             outputs = payload.get('max_tokens') or price['max_completion_tokens']
         maximum = Decimal(str(price['prompt'])) * inputs + Decimal(str(price['completion'])) * outputs
         maximum += Decimal(str(price.get('request', 0)))
+        if not maximum.is_finite() or maximum < 0:
+            raise BudgetStopped('Pricing unavailable: invalid reservation')
         identifier = uuid4().hex
         with self.ledger() as state:
             if state['stopped']:
@@ -76,6 +78,7 @@ class CampaignBudget:
             row = next(item for item in state['requests'] if item['id'] == identifier)
             if row['status'] != 'reserved':
                 raise BudgetStopped('Request already settled')
+            row['http_status'] = response.status_code
             # An explicit 429 rejects the request before generation. Other failed
             # or malformed responses remain conservatively reserved and stop runs.
             if response.status_code == 429:
@@ -91,7 +94,9 @@ class CampaignBudget:
                     raise ValueError('Provider usage unavailable')
                 charge = Decimal(str(cost))
                 if charge > Decimal(row['reserved']):
-                    raise ValueError('Provider charge exceeded conservative reservation')
+                    row.update(status='over_reservation', charged=str(charge), usage=usage)
+                    state['stopped'] = 'Provider charge exceeded conservative reservation'
+                    raise BudgetStopped(state['stopped'])
             except (ValueError, TypeError, AttributeError) as exc:
                 row['status'] = 'unresolved'
                 state['stopped'] = str(exc)

@@ -23,7 +23,7 @@ def test_collection_is_lightweight_and_baseline_unchanged():
     cases = full_cases() + stress_cases()
     assert len(cases) == 99
     digest = hashlib.sha256(json.dumps([asdict(case) for case in cases], default=lambda value: sorted(value), sort_keys=True).encode()).hexdigest()
-    assert digest == 'f466df1ae88422eb3a2357d0cc6d913918e56c87128a4725aa31062cacac68fd' 
+    assert digest == 'f466df1ae88422eb3a2357d0cc6d913918e56c87128a4725aa31062cacac68fd'
 
 
 @pytest.mark.parametrize('kind,index', [('scale', i) for i in range(8)] + [('challenge', i) for i in range(12)])
@@ -75,6 +75,9 @@ def test_scripted_discovery_is_feasible_and_isolated(index, monkeypatch):
     monkeypatch.setattr(runtime, 'request_chat_completion', completion)
     results = asyncio.run(run_case(case, history))
     assert RoutingCorrectnessMetric().measure(results[0]) == 1
+    assert results[0].metadata['roster_before'] is None
+    assert len(results[0].metadata['initial_candidates']) <= 20
+    assert 'initial_owner_coverage' in results[0].metadata
     assert results[0].metadata['discovery_call_count'] <= 6
     assert len(observed) <= 4
     for tool in results[0].tools_called:
@@ -93,6 +96,9 @@ def test_hidden_history_not_in_assignment_profiles(tmp_path, monkeypatch):
     for index in (4, 5, 6):
         _, _, measurements = prepare(Variant('challenge', index, 100), tmp_path / str(index))
         assert challenges()[index].evidence not in json.dumps(measurements['initial_candidates'])
+        if index == 6:
+            profiles = {item['name']: item for item in measurements['initial_candidates']}
+            assert profiles['Housing Desk Elm']['initial_assignment'] == profiles['Housing Desk Ash']['initial_assignment']
 
 
 def test_watchdog_timeout_and_memory(tmp_path):
@@ -191,3 +197,107 @@ def test_provider_budget_checked_before_every_attempt(tmp_path, monkeypatch):
     asyncio.run(provider.paced_post(None, 'https://openrouter.ai/api/v1/chat/completions', json={'model': 'test'}))
     with budget.ledger() as state:
         assert [row['status'] for row in state['requests']] == ['rate_limited', 'settled']
+
+
+def test_campaign_sources_cannot_mix(tmp_path):
+    from .routing_campaign import ensure_manifest
+    ensure_manifest(tmp_path)
+    ensure_manifest(tmp_path)
+    path = tmp_path / 'source_manifest.json'
+    saved = json.loads(path.read_text())
+    saved['routing_population.py'] = 'another fixture version'
+    path.write_text(json.dumps(saved))
+    with pytest.raises(ValueError, match='do not mix'):
+        ensure_manifest(tmp_path)
+
+
+def test_outcomes_are_separate_and_resume_without_rerunning(tmp_path, monkeypatch):
+    from . import routing_campaign
+    monkeypatch.setenv('EVAL_CAMPAIGN_DIR', str(tmp_path))
+    calls = []
+
+    def child(command, destination):
+        calls.append(destination)
+        routing_campaign.write_json(destination / 'outcome.json', {'status': 'completed'})
+        return {'resource_failure': None}
+
+    monkeypatch.setattr(routing_campaign, 'supervise', child)
+    first, second = Variant('scale', 0, 10), Variant('scale', 1, 10)
+    routing_campaign.run_variant(first, 'capacity')
+    routing_campaign.run_variant(first, 'capacity')
+    routing_campaign.run_variant(second, 'capacity')
+    assert len(calls) == 2 and calls[0] != calls[1]
+
+
+def test_transport_error_is_provider_failure_and_keeps_reservation(tmp_path, monkeypatch):
+    from . import provider
+    budget = ledger(tmp_path)
+
+    async def timeout(*args, **kwargs):
+        raise httpx.ReadTimeout('timed out')
+
+    async def sleep(*args):
+        pass
+
+    monkeypatch.setattr(provider, 'request_budget', budget)
+    monkeypatch.setattr(provider, '_post', timeout)
+    monkeypatch.setattr(provider.asyncio, 'sleep', sleep)
+    with pytest.raises(RuntimeError, match='OpenRouter transport') as error:
+        asyncio.run(provider.interaction_completion(model='test', messages=[]))
+    assert provider.failure_kind(str(error.value)) == 'provider'
+    with budget.ledger() as state:
+        assert state['requests'][0]['status'] == 'reserved'
+    with pytest.raises(BudgetStopped, match='Unsettled'):
+        budget.reserve({'model': 'test'})
+
+
+@pytest.mark.parametrize('fails', [False, True])
+def test_live_child_reuses_preflight_and_restores_scope(tmp_path, monkeypatch, fails):
+    import os
+    from . import routing_campaign, harness, provider
+    from .routing_population import materialize
+    variant = Variant('scale', 0, 10)
+    _, _, manifest = materialize(variant)
+    monkeypatch.setenv('EVAL_CAMPAIGN_DIR', str(tmp_path))
+    routing_campaign.write_json(tmp_path / 'capacity' / variant.key / 'fixture.json', manifest)
+    routing_campaign.write_json(tmp_path / 'prices.json', {provider.MODEL: {'context_length': 200000}})
+    original_dir, original_budget = provider._artifact_dir, provider.request_budget
+    original_environment = os.environ.get('OPENPOKE_DATA_DIR')
+    directories = []
+
+    def evaluate(case, history):
+        directories.append(os.environ['OPENPOKE_DATA_DIR'])
+        assert provider.request_budget is not None
+        if fails:
+            raise RuntimeError('scripted harness failure')
+
+    monkeypatch.setattr(harness, 'evaluate_live_case', evaluate)
+    monkeypatch.setattr(routing_campaign, 'prepare', lambda *args: pytest.fail('Repeated preflight'))
+    if fails:
+        with pytest.raises(RuntimeError, match='scripted harness failure'):
+            routing_campaign.child(variant, 'live')
+    else:
+        routing_campaign.child(variant, 'live')
+    from pathlib import Path
+    assert directories and all(not Path(directory).exists() for directory in directories)
+    assert provider._artifact_dir is original_dir and provider.request_budget is original_budget
+    assert os.environ.get('OPENPOKE_DATA_DIR') == original_environment
+
+
+def test_unexpected_charge_is_recorded_and_stops_campaign(tmp_path):
+    budget = ledger(tmp_path)
+    identifier = budget.reserve({'model': 'test'})
+    with pytest.raises(BudgetStopped, match='exceeded'):
+        budget.settle(identifier, response(1))
+    with budget.ledger() as state:
+        assert state['requests'][0]['charged'] == '1'
+        assert state['requests'][0]['status'] == 'over_reservation'
+    with pytest.raises(BudgetStopped, match='exceeded'):
+        budget.reserve({'model': 'test'})
+
+
+def test_population_covers_task_families_and_naming_styles():
+    from .routing_population import background_name, FAMILIES
+    text = '\n'.join(background_name(i, 9137, 'Montreal', ('Hotel', 'Flights')) for i in range(5000)).casefold()
+    assert all(family.casefold() in text for family in FAMILIES)
+    assert all(pattern in text for pattern in ('ref ', 'account ', 'reservation ', 'stuff:', 'follow-up', 'records /'))

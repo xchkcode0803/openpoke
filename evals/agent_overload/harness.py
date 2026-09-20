@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import tempfile
 import time
 from dataclasses import dataclass
@@ -318,6 +319,18 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
                     "model_call_seconds_including_pacing": runtime.model_latency,
                     "conversation_context": case.initial_conversation,
                 }
+                if any(tag.startswith("routing_") for tag in case.tags) and runtime.model_calls:
+                    first_messages = runtime.model_calls[0]["messages"]
+                    first_input = str(first_messages[0].get("content", ""))
+                    match = re.search(r"<active_agents[^>]*>\s*(.*?)\s*</active_agents>", first_input, re.S)
+                    if match:
+                        candidates = json.loads(match.group(1))
+                        candidate_names = {item["name"] for item in candidates}
+                        metadata["initial_candidates"] = candidates
+                        metadata["initial_owner_coverage"] = {
+                            item["task_key"]: bool(candidate_names.intersection(item["acceptable_agent_names"]))
+                            for item in expected if item["route"] == "reuse"
+                        }
                 test_case = LLMTestCase(
                     name=f"{case.name}[{index}]",
                     input=turn.message,
