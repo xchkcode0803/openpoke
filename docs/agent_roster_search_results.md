@@ -1,6 +1,6 @@
 # Agent roster search results
 
-This report compares candidate-based routing with the preserved Sonnet 4 flat-roster baseline. The model, authored cases, generated rosters, expected decisions, and graders are unchanged. Results from unsuccessful experiments remain preserved; the final full-run score is not assembled from selectively rerun cases.
+This report compares candidate-based routing with the preserved Sonnet 4 flat-roster baseline. The model and the 99 baseline scenarios—including their authored inputs, generated rosters, expected decisions, and graders—are unchanged. Six additional inspection scenarios are reported separately. Results from unsuccessful experiments remain preserved; the final full-run score is not assembled from selectively rerun cases.
 
 ## Final full comparison
 
@@ -56,11 +56,11 @@ Savings therefore come from both less roster context and fewer interaction-model
 
 ## Verification before the full run
 
-The final implementation passed 95 offline tests. Discovery and prompt construction have 100% statement/branch coverage; new runtime and handler paths are exercised without imposing coverage requirements on unrelated legacy code. Scripted tests exercise actual tools and state isolation without model calls.
+The evaluated revision, `78bba2c`, passed 95 offline tests. Discovery and prompt construction have 100% statement/branch coverage; new runtime and handler paths are exercised without imposing coverage requirements on unrelated legacy code. Scripted tests exercise actual tools and state isolation without model calls.
 
 A read-only candidate-recall check retained an acceptable owner for all 86 named reuse expectations in the existing collection. That measures candidate availability, not model correctness. The production selector does not read expectations or case names.
 
-Live verification proceeded through targeted gates before one development run and one full run:
+Live verification used one development-suite run and two full verification runs, with targeted checks before each full run:
 
 | Experiment | All-metric passes | Interaction charges | Finding |
 | --- | ---: | ---: | --- |
@@ -98,6 +98,14 @@ Total reported charges for the nine optimization-validation runs in the ledger w
 Per-run files retain model/tool trajectories, metrics, semantic judgments, provider usage and timing, and judge usage. Full DeepEval result files were archived before later offline checks. All final model responses identify `anthropic/claude-sonnet-4`. Case definitions and graders are unchanged from the previous feature milestone; baseline collection fingerprints remain intact. Execution workers stayed disabled and application data remained unchanged.
 
 These artifacts are local and Git-ignored. The report is committed, and reproduction commands are in `agent_roster_search.md`.
+
+## Pre-PR cleanup verification
+
+The cleanup after `78bba2c` did not rerun paid evaluations. It retained the ranking formula and priority order, cached each normalized name and score within a call, clarified runtime variable names, and moved shared live-evaluation orchestration into the existing harness.
+
+Before/after offline characterization covered 111 cases / 114 turns with fixed timestamps and network access disabled. Rankings, candidate lists, serialized model requests/tool schemas, tool results, user-visible responses, and worker dispatches were identical. Recorded responses were replayed; the two unrecorded smoke variants used their recorded seed scenario's responses. This is an equivalence check, not a new live accuracy result.
+
+All 100 offline tests pass. Discovery and prompt construction retain 100% statement/branch coverage. The case fingerprints, baseline artifact, measured run artifacts, and application data are preserved. One CodeRabbit CLI review against `main` covered all 20 changed files and returned no findings. The benchmark numbers above remain the measurements from the evaluated implementation, not newly measured cleanup results.
 
 ## Interpretation limits
 

@@ -6,15 +6,25 @@ The interaction agent receives a bounded candidate roster, then delegates throug
 
 Show every owner when the roster contains at most 20 agents. For larger rosters, rank names and show at most 20 candidates. The prompt states the total roster size and whether the list is complete.
 
-Ranking normalizes Unicode and case, treats punctuation as separators, and handles simple plural forms. It uses inverse document frequency and a name-length penalty to rank keyword overlap. Current-message terms carry more weight than recent conversation terms. Exact names mentioned in the current message or conversation receive priority; alphabetical tie-breaking makes results deterministic. This is a small lexical ranker, not an embedding service or a model-generated selection.
+The ranking priorities, in order, are:
 
-Each candidate includes its exact name and, when recorded, short verbatim excerpts from its initial and latest assignments. Each excerpt is capped at 400 characters and truncation is explicit. These are ownership hints, not generated summaries or live task results. Empty history is unknown information and must not contradict the main conversation. JSON escaping preserves names without allowing them to break the surrounding message structure.
+1. Exact normalized name match with the current message.
+2. Name explicitly mentioned in the current message.
+3. Name explicitly mentioned anywhere in the supplied conversation.
+4. Keyword relevance.
+5. Position of the latest conversation mention, then alphabetical tie-breaking.
 
-Candidate selection bounds roster-related model context. It does not bound the main conversation or the disk space required by execution logs. Lexical retrieval can still miss synonyms and implicit relationships; candidates are not guaranteed exhaustive.
+Comparison uses Unicode NFKC normalization, case folding, punctuation separators, and simple plural handling. Keyword scoring gives each matching term weight `log(1 + roster_size / names_containing_term)`. Current-message matches count three times; recent-conversation matches count once. The score is divided by `1 + 0.15 × unique_name_terms` to avoid favoring long names through incidental words.
+
+Keyword matching uses the latest 6,000 characters of conversation; explicit-name matching uses the full supplied history. Each normalized name and ranking score is computed once per ranking call. This local lexical ranker selects candidates only; the model still decides ownership and delegation.
+
+After selection, each candidate includes its exact name and, when recorded, short verbatim excerpts from its initial and latest assignments. These excerpts do not affect name ranking. Identical initial and latest assignments are shown only once. Each excerpt is capped at 400 characters and truncation is explicit. These are ownership hints, not generated summaries or live task results. Empty history is unknown information and must not contradict the main conversation. JSON escaping preserves names without allowing them to break the surrounding message structure.
+
+The 20-candidate limit bounds the number of displayed owners, not the entire prompt's token count. Main conversation length, name length, and execution-log storage are not bounded by that limit. Lexical retrieval can still miss synonyms and implicit relationships; candidates are not guaranteed exhaustive.
 
 ## Discovery tools
 
-`search_agents(query, offset=0)` returns up to ten exact names ranked by keyword relevance, `total_matches`, and `next_offset`. Words need not all match. Use the same query and next offset for another page. Ordering is stable for an unchanged roster; concurrent edits can shift pages. Search examines names, not historical text.
+`search_agents(query, offset=0)` returns up to ten exact names ranked by keyword relevance, `total_matches`, and `next_offset`. Unlike automatic candidate selection, this tool ranks from its query alone, without conversation history. Words need not all match. Use the same query and next offset for another page. Ordering is stable for an unchanged roster; concurrent edits can shift pages. Search examines names, not historical text.
 
 `inspect_agent(agent_name, offset=0)` requires an exact roster name. It returns six recorded assignments/responses, newest append first, with timestamps and pagination. Entries are capped at 1,000 characters with explicit truncation flags. Raw tool activity is excluded. This tool helps choose between owners; it does not perform their tasks or check live emails/status.
 
@@ -36,7 +46,7 @@ The overall eight-model-call limit remains. Search and inspection may execute at
 
 Deterministic tests cover ranking, Unicode, plurals, exact names, pagination, validation, bounded excerpts, initial/latest ownership, JSON round-tripping, and read-only history access. Scripted runtime tests execute real tools in temporary stores and cover selection paths, tool availability, all-call batch execution, terminal dispatch, user notification, failed/discovery batches, budgets, and per-turn resets. They make no model API calls.
 
-The baseline case definitions and graders remain frozen. The six inspection cases use separately seeded execution histories and remain outside standard/full. The harness patches both the prompt builder's and tool handlers' log-store getters so ownership hints are isolated too. Artifacts retain model requests, tool results, failed requests, semantic judgments, usage, and timing.
+The baseline case definitions and graders remain frozen. The six inspection cases use separately seeded execution histories and remain outside standard/full. Live grading and artifact orchestration are shared in the harness rather than imported between test modules. The harness patches both the prompt builder's and tool handlers' log-store getters so ownership hints are isolated too. Artifacts retain model requests, tool results, failed requests, semantic judgments, usage, and timing.
 
 ## Verification commands
 

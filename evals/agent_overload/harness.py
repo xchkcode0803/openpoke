@@ -1,4 +1,4 @@
-"""Run routing cases through the real interaction runtime without workers."""
+"""Run and grade routing cases with isolated state and stub workers."""
 
 from __future__ import annotations
 
@@ -338,4 +338,39 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
     return completed
 
 
-__all__ = ["run_case"]
+def evaluate_live_case(case, history=None) -> None:
+    """Run and grade a live case, preserving every turn even when grading fails."""
+    from unittest.mock import patch
+    from deepeval import assert_test
+    from .metrics import InstructionFidelityMetric, RoutingCorrectnessMetric
+    from .provider import (
+        MODEL, context_limits, interaction_completion, save_result, verify_context_limit,
+    )
+    if "stress" in case.tags and MODEL not in context_limits:
+        asyncio.run(verify_context_limit(MODEL))
+    with patch("server.agents.interaction_agent.runtime.request_chat_completion", interaction_completion):
+        results = asyncio.run(run_case(case, history))
+    failures = []
+    for result in results:
+        if result.metadata.get("failure_kind") in {"provider", "capacity", "harness"}:
+            save_result("unavailable.jsonl", result.model_dump(mode="json"))
+            failures.append(f"{result.name}: unavailable ({result.metadata['failure_kind']})")
+            continue
+        metrics = [RoutingCorrectnessMetric()]
+        if result.metadata.get("expected_delegations") or result.metadata.get("response_requirements"):
+            metrics.append(InstructionFidelityMetric())
+        try:
+            assert_test(result, metrics=metrics, run_async=False)
+        except Exception as exc:
+            if not isinstance(exc, AssertionError):
+                save_result("judge_errors.jsonl", {"case": result.name, "error": str(exc)})
+            failures.append(f"{result.name}: {exc}")
+        finally:
+            save_result("turns.jsonl", {"result": result.model_dump(mode="json"), "metrics": [
+                {"name": metric.__name__, "score": getattr(metric, "score", None),
+                 "reason": getattr(metric, "reason", None)} for metric in metrics
+            ]})
+    assert not failures, "\n".join(failures)
+
+
+__all__ = ["run_case", "evaluate_live_case"]

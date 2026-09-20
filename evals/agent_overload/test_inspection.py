@@ -1,14 +1,20 @@
 """Additional live history cases and offline fixture/harness checks."""
 import asyncio
+import json
 import os
 
 import pytest
 
 from .cases import DEVELOPMENT_CASES
-from .harness import run_case
+from .harness import evaluate_live_case, run_case
 from .inspection_cases import INSPECTION_CASES, INSPECTION_HISTORY
 from .metrics import RoutingCorrectnessMetric
-from .test_routing import _evaluate_live_case, _tool_call
+
+
+def _tool_call(identifier: str, name: str, arguments: dict) -> dict:
+    return {"id": identifier, "type": "function", "function": {
+        "name": name, "arguments": json.dumps(arguments),
+    }}
 
 
 @pytest.mark.live
@@ -17,7 +23,7 @@ from .test_routing import _evaluate_live_case, _tool_call
 def test_live_inspection(case):
     if not os.getenv('RUN_LIVE_EVALS'):
         pytest.skip('set RUN_LIVE_EVALS=1 to call the interaction model')
-    _evaluate_live_case(case, INSPECTION_HISTORY[case.name])
+    evaluate_live_case(case, INSPECTION_HISTORY[case.name])
 
 
 def test_inspection_fixtures_are_separate_and_valid():
@@ -117,3 +123,74 @@ def test_provider_timing_includes_retries_and_pacing(monkeypatch):
     response = asyncio.run(provider.paced_post(None, 'https://openrouter.ai/api/v1/chat/completions'))
     assert response.extensions['eval_timing'] == {
         'request_seconds': 2.0, 'pacing_seconds': 2.0, 'retry_wait_seconds': 7.0, 'attempts': 2}
+
+
+@pytest.mark.parametrize('failure', ['routing', 'judge', 'provider', 'agent_iteration_limit'])
+def test_evaluation_continues_after_a_failed_turn(monkeypatch, failure):
+    import deepeval
+    from deepeval.test_case import LLMTestCase
+    from . import harness, provider
+    import server.agents.interaction_agent.runtime as runtime_module
+
+    first = LLMTestCase(name='first', input='request', actual_output='reply', metadata={})
+    second = LLMTestCase(name='second', input='request', actual_output='reply', metadata={})
+    if failure in {'provider', 'agent_iteration_limit'}:
+        first.metadata['failure_kind'] = failure
+    graded, saved = [], []
+    original_completion = runtime_module.request_chat_completion
+
+    async def run_case(case, history):
+        assert runtime_module.request_chat_completion is provider.interaction_completion
+        return [first, second]
+
+    def grade(result, **kwargs):
+        assert kwargs['run_async'] is False
+        graded.append(result.name)
+        if result.name == 'first':
+            if failure == 'judge':
+                raise RuntimeError('Judge unavailable')
+            raise AssertionError('Behavioral failure')
+
+    monkeypatch.setattr(harness, 'run_case', run_case)
+    monkeypatch.setattr(deepeval, 'assert_test', grade)
+    monkeypatch.setattr(provider, 'save_result', lambda file, record: saved.append((file, record)))
+    with pytest.raises(AssertionError, match='first'):
+        harness.evaluate_live_case(INSPECTION_CASES[0])
+
+    assert 'second' in graded
+    assert ('first' in graded) is (failure != 'provider')
+    assert [record['result']['name'] for file, record in saved if file == 'turns.jsonl'] == (
+        ['second'] if failure == 'provider' else ['first', 'second'])
+    assert sum(file == 'unavailable.jsonl' for file, _ in saved) == (failure == 'provider')
+    assert sum(file == 'judge_errors.jsonl' for file, _ in saved) == (failure == 'judge')
+    assert runtime_module.request_chat_completion is original_completion
+
+
+def test_evaluation_verifies_stress_context_once(monkeypatch):
+    from dataclasses import replace
+    import deepeval
+    from deepeval.test_case import LLMTestCase
+    from . import harness, provider
+
+    case = replace(INSPECTION_CASES[0], tags=frozenset({'stress'}))
+    history = INSPECTION_HISTORY[case.name]
+    limits, verified, received, saved = {}, [], [], []
+
+    async def verify(model):
+        verified.append(model)
+        limits[model] = 200000
+
+    async def run_case(actual_case, actual_history):
+        received.append((actual_case, actual_history))
+        return [LLMTestCase(name='result', input='request', actual_output='reply', metadata={})]
+
+    monkeypatch.setattr(provider, 'context_limits', limits)
+    monkeypatch.setattr(provider, 'verify_context_limit', verify)
+    monkeypatch.setattr(harness, 'run_case', run_case)
+    monkeypatch.setattr(deepeval, 'assert_test', lambda *args, **kwargs: None)
+    monkeypatch.setattr(provider, 'save_result', lambda file, record: saved.append(file))
+    harness.evaluate_live_case(case, history)
+    harness.evaluate_live_case(case, history)
+    assert verified == [provider.MODEL]
+    assert received == [(case, history), (case, history)]
+    assert saved == ['turns.jsonl', 'turns.jsonl']

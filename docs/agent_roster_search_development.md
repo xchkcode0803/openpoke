@@ -1,4 +1,6 @@
-# Agent roster search: development evaluation
+# Agent roster search: initial experiment
+
+This is the historical search-only attempt. It is superseded by [the current implementation](agent_roster_search.md) and [the final comparison](agent_roster_search_results.md). Its recorded failures and costs are retained.
 
 This report evaluates the first search-and-inspection implementation on Sonnet 4. It compares unchanged development cases with preserved flat-roster results and separately evaluates six new history-based scenarios. It is one run, not a reliability estimate.
 

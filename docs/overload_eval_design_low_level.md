@@ -11,7 +11,7 @@ Inspect AI was considered but its solver model requires more adaptation around t
 - `cases.py`: frozen case/turn/delegation dataclasses, authored cases, generators, and suite selection.
 - `stress_cases.py`: explicit stress fixtures and deterministic nested roster generation.
 - `inspection_cases.py`: six additional history-based scenarios and separately seeded execution histories; excluded from standard/full.
-- `harness.py`: temporary services, worker stub, real runtime execution, tool/model recording.
+- `harness.py`: temporary services, worker stub, real runtime execution, tool/model recording, and shared live grading/artifact orchestration.
 - `metrics.py`: deterministic matching and Jev/Sonnet semantic grading.
 - `provider.py`: pinned eval model, scoped HTTP requests, pacing/retries, context metadata, and run artifacts.
 - Repository-root `conftest.py`: session import-time service isolation and cleanup, loaded before collection for both root and explicit eval invocations.
