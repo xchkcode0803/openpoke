@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--root', default='.deepeval/comparison-main-v1')
     parser.add_argument('--budget', type=float, default=10)
     parser.add_argument('--preflight', action='store_true')
+    parser.add_argument('--resume', action='store_true', help='Continue Gmail after a diagnosed DNS outage; never rerun agents')
     args = parser.parse_args()
     if not 0 < args.budget <= 10:
         parser.error('Budget must be greater than zero and at most $10 per collection')
@@ -41,7 +42,9 @@ def main():
     output = Path(args.root).resolve() / args.model / args.collection
     output.mkdir(parents=True, exist_ok=True)
     manifest_path = output / 'comparison.json'
-    if manifest_path.exists() and not args.preflight:
+    if args.resume and (args.collection != 'gmail' or not manifest_path.exists()):
+        parser.error('Resume requires an existing Gmail comparison')
+    if manifest_path.exists() and not args.preflight and not args.resume:
         parser.error('This collection already started; inspect its artifacts, do not silently rerun')
     from evals.agent_gmail.run import load_credentials
     load_credentials()
@@ -63,6 +66,24 @@ def main():
         from evals.agent_gmail.provider import Provider
         verified = Provider(EvalConfig(model, model, model))
         asyncio.run(verified.verify())
+        if args.resume:
+            old = json.loads(manifest_path.read_text())
+            if old['model'] != model or old['source_hashes'] != fingerprint():
+                parser.error('Cannot resume with changed model or benchmark sources')
+            from .resume import resume_gmail
+            old['status'] = 'running'
+            manifest_path.write_text(json.dumps(old, indent=2))
+            try:
+                code = asyncio.run(resume_gmail(args, output, model, provider.paced_post))
+            except BaseException as exc:
+                old = json.loads(manifest_path.read_text())
+                old.update(status='interrupted', error=type(exc).__name__ + ': ' + str(exc))
+                manifest_path.write_text(json.dumps(old, indent=2))
+                raise
+            old = json.loads(manifest_path.read_text())
+            old.update(status='finished', exit_code=code)
+            manifest_path.write_text(json.dumps(old, indent=2))
+            return code
         manifest = {'model': model, 'models': verified.metadata, 'collection': args.collection,
                     'git_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
                     'source_hashes': fingerprint(), 'judges': JUDGES, 'repetitions': 1,
