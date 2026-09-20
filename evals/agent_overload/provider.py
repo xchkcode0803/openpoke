@@ -37,13 +37,17 @@ async def interaction_completion(*, model, messages, system=None, api_key=None, 
         response = await paced_post(client, "https://openrouter.ai/api/v1/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json=payload)
     if response.is_error:
         raise RuntimeError(f"OpenRouter request failed ({response.status_code}): {response.text}")
-    return response.json()
+    result = response.json()
+    result["_eval_timing"] = response.extensions["eval_timing"]
+    return result
 
 
 def failure_kind(error: str | None) -> str | None:
     if not error:
         return None
     text = error.lower()
+    if "tool iteration limit" in text:
+        return "agent_iteration_limit"
     if any(value in text for value in ("context length", "context_length", "context window", "capacity limit")):
         return "capacity"
     if any(value in text for value in ("openrouter", "429", "jev request", "fallback request")):
@@ -65,13 +69,26 @@ async def paced_post(client, url, **kwargs):
     global _next_request
     if not str(url).startswith("https://openrouter.ai/"):
         return await _post(client, url, **kwargs)
+    request_seconds = 0.0
+    pacing_seconds = 0.0
+    retry_wait_seconds = 0.0
     for attempt in range(4):
-        await asyncio.sleep(max(0, _next_request - time.monotonic()))
+        before_wait = time.monotonic()
+        await asyncio.sleep(max(0, _next_request - before_wait))
+        pacing_seconds += time.monotonic() - before_wait
         _next_request = time.monotonic() + 4.1
+        started = time.monotonic()
         response = await _post(client, url, **kwargs)
+        request_seconds += time.monotonic() - started
+        response.extensions["eval_timing"] = {
+            "request_seconds": request_seconds, "pacing_seconds": pacing_seconds,
+            "retry_wait_seconds": retry_wait_seconds, "attempts": attempt + 1,
+        }
         if response.status_code != 429 or attempt == 3:
             return response
+        before_wait = time.monotonic()
         await asyncio.sleep(retry_delay(response.headers.get("Retry-After"), attempt))
+        retry_wait_seconds += time.monotonic() - before_wait
 
 
 async def verify_context_limit(model: str) -> None:

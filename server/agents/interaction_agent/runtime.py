@@ -45,6 +45,9 @@ class InteractionAgentRuntime:
     """Manages the interaction agent's request processing."""
 
     MAX_TOOL_ITERATIONS = 8
+    MAX_DISCOVERY_CALLS = 6
+    MAX_DISCOVERY_ROUNDS = 4
+    DISCOVERY_TOOLS = frozenset({"search_agents", "inspect_agent"})
 
     # Initialize interaction agent runtime with settings and service dependencies
     def __init__(self) -> None:
@@ -55,6 +58,8 @@ class InteractionAgentRuntime:
         self.conversation_log = get_conversation_log()
         self.working_memory_log = get_working_memory_log()
         self.tool_schemas = get_tool_schemas()
+        self.discovery_calls = 0
+        self.discovery_closed_reason = None
 
         if not self.api_key:
             raise ValueError(
@@ -140,8 +145,23 @@ class InteractionAgentRuntime:
         """Iteratively query the LLM until it issues a final response."""
 
         summary = _LoopSummary()
+        self.discovery_calls = 0
+        self.discovery_closed_reason = None
+        self.tool_schemas = get_tool_schemas()
 
         for iteration in range(self.MAX_TOOL_ITERATIONS):
+            if self.discovery_closed_reason is None:
+                if self.discovery_calls >= self.MAX_DISCOVERY_CALLS:
+                    self.discovery_closed_reason = "call_budget"
+                elif iteration >= self.MAX_DISCOVERY_ROUNDS:
+                    self.discovery_closed_reason = "round_budget"
+                if self.discovery_closed_reason:
+                    self.tool_schemas = [tool for tool in self.tool_schemas
+                                         if tool["function"]["name"] not in self.DISCOVERY_TOOLS]
+                    messages.append({"role": "system", "content":
+                        "Discovery is now closed for this turn. Finish using the evidence available. "
+                        "Delegation, responding and waiting remain available. Do not invent an owner "
+                        "or create an agent merely because the discovery budget ended."})
             response = await self._make_llm_call(system_prompt, messages)
             assistant_message = self._extract_assistant_message(response)
 
@@ -163,6 +183,9 @@ class InteractionAgentRuntime:
             if not parsed_tool_calls:
                 break
 
+            end_turn_requested = False
+            all_tools_succeeded = True
+            needs_discovery_result = any(call.name in self.DISCOVERY_TOOLS for call in parsed_tool_calls)
             for tool_call in parsed_tool_calls:
                 summary.tool_names.append(tool_call.name)
 
@@ -172,6 +195,8 @@ class InteractionAgentRuntime:
                         summary.execution_agents.add(agent_name)
 
                 result = self._execute_tool(tool_call)
+                end_turn_requested |= result.end_turn
+                all_tools_succeeded &= result.success
 
                 if result.user_message:
                     summary.user_messages.append(result.user_message)
@@ -182,6 +207,9 @@ class InteractionAgentRuntime:
                     "content": self._format_tool_result(tool_call, result),
                 }
                 messages.append(tool_message)
+            if (end_turn_requested and all_tools_succeeded and not needs_discovery_result
+                    and (summary.user_messages or summary.last_assistant_text)):
+                break
         else:
             raise RuntimeError("Reached tool iteration limit without final response")
 
@@ -286,6 +314,13 @@ class InteractionAgentRuntime:
     # Execute tool calls with error handling and logging, returning standardized results
     def _execute_tool(self, tool_call: _ToolCall) -> ToolResult:
         """Execute a tool call and convert low-level errors into structured results."""
+
+        if tool_call.name in self.DISCOVERY_TOOLS:
+            allowed = (self.discovery_closed_reason is None
+                       and self.discovery_calls < self.MAX_DISCOVERY_CALLS)
+            self.discovery_calls += 1
+            if not allowed:
+                return ToolResult(success=False, payload={"error": "Discovery budget exhausted"})
 
         if "__invalid_arguments__" in tool_call.arguments:
             error = tool_call.arguments["__invalid_arguments__"]

@@ -1,4 +1,4 @@
-"""Run routing cases through the real interaction runtime without workers."""
+"""Run and grade routing cases with isolated state and stub workers."""
 
 from __future__ import annotations
 
@@ -74,7 +74,15 @@ class _TracingInteractionRuntime:
                 if estimate + 8192 > limit:
                     raise RuntimeError(f"capacity limit: estimated {estimate} input tokens plus 8192 reserve exceeds {limit}")
             started = time.perf_counter()
-            response = await original_make_call(system_prompt, messages)
+            request = {"system": system_prompt, "messages": json.loads(json.dumps(messages)),
+                       "tools": json.loads(json.dumps(self._runtime.tool_schemas))}
+            try:
+                response = await original_make_call(system_prompt, messages)
+            except Exception as exc:
+                elapsed = time.perf_counter() - started
+                self.model_latency += elapsed
+                self.model_calls.append({**request, "response": {}, "error": str(exc), "elapsed_seconds": elapsed})
+                raise
             elapsed = time.perf_counter() - started
             input_tokens, output_tokens, cost = _usage(response)
             self.input_tokens += input_tokens or 0
@@ -83,7 +91,7 @@ class _TracingInteractionRuntime:
                 self.cost += cost
                 self.has_cost = True
             self.model_latency += elapsed
-            self.model_calls.append({"system": system_prompt, "messages": json.loads(json.dumps(messages)), "response": response, "elapsed_seconds": elapsed})
+            self.model_calls.append({**request, "response": response, "elapsed_seconds": elapsed})
             update_current_span(
                 input=json.dumps({"system": system_prompt, "messages": messages, "tools": self._runtime.tool_schemas}, default=str),
                 output=json.dumps(response, default=str),
@@ -195,15 +203,15 @@ def _seed_case(case: RoutingCase, roster: Any, conversation: Any, working_memory
             raise ValueError(f"Unsupported conversation tag: {tag}")
 
 
-async def run_case(case: RoutingCase) -> list[LLMTestCase]:
+async def run_case(case: RoutingCase, history: dict[str, tuple[tuple[str, str], ...]] | None = None) -> list[LLMTestCase]:
     """Execute one case and return one DeepEval test case per routing turn."""
     from unittest.mock import patch
     with tempfile.TemporaryDirectory(prefix="openpoke-agent-overload-") as directory:
         with patch.dict(os.environ, {"OPENPOKE_DATA_DIR": directory}):
-            return await _run_isolated_case(case, Path(directory))
+            return await _run_isolated_case(case, Path(directory), history)
 
 
-async def _run_isolated_case(case: RoutingCase, root: Path) -> list[LLMTestCase]:
+async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> list[LLMTestCase]:
 
     from unittest.mock import patch
 
@@ -213,6 +221,16 @@ async def _run_isolated_case(case: RoutingCase, root: Path) -> list[LLMTestCase]
 
     roster, conversation, working_memory, execution_logs = _reset_services(root)
     _seed_case(case, roster, conversation, working_memory)
+    for name, entries in (history or {}).items():
+        if name not in case.initial_agents:
+            raise ValueError(f"History owner is not in the roster: {name}")
+        for tag, text in entries:
+            if tag == "agent_request":
+                execution_logs.record_request(name, text)
+            elif tag == "agent_response":
+                execution_logs.record_agent_response(name, text)
+            else:
+                raise ValueError(f"Unsupported history tag: {tag}")
     settings = SimpleNamespace(
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
         interaction_agent_model=MODEL,
@@ -224,6 +242,7 @@ async def _run_isolated_case(case: RoutingCase, root: Path) -> list[LLMTestCase]
 
     patches = (
         patch.object(agent_module, "get_agent_roster", return_value=roster),
+        patch.object(agent_module, "get_execution_agent_logs", return_value=execution_logs),
         patch.object(tools_module, "get_agent_roster", return_value=roster),
         patch.object(tools_module, "get_execution_agent_logs", return_value=execution_logs),
         patch.object(tools_module, "get_conversation_log", return_value=conversation),
@@ -291,6 +310,10 @@ async def _run_isolated_case(case: RoutingCase, root: Path) -> list[LLMTestCase]
                     "failure_kind": failure_kind(result.error),
                     "prompt_estimates": runtime.prompt_estimates[:],
                     "model_calls": runtime.model_calls[:],
+                    "model_call_count": len(runtime.model_calls),
+                    "discovery_call_count": runtime._runtime.discovery_calls,
+                    "discovery_closed_reason": runtime._runtime.discovery_closed_reason,
+                    "provider_timing": [call["response"].get("_eval_timing", {}) for call in runtime.model_calls],
                     "model_call_seconds_including_pacing": runtime.model_latency,
                     "conversation_context": case.initial_conversation,
                 }
@@ -315,4 +338,39 @@ async def _run_isolated_case(case: RoutingCase, root: Path) -> list[LLMTestCase]
     return completed
 
 
-__all__ = ["run_case"]
+def evaluate_live_case(case, history=None) -> None:
+    """Run and grade a live case, preserving every turn even when grading fails."""
+    from unittest.mock import patch
+    from deepeval import assert_test
+    from .metrics import InstructionFidelityMetric, RoutingCorrectnessMetric
+    from .provider import (
+        MODEL, context_limits, interaction_completion, save_result, verify_context_limit,
+    )
+    if "stress" in case.tags and MODEL not in context_limits:
+        asyncio.run(verify_context_limit(MODEL))
+    with patch("server.agents.interaction_agent.runtime.request_chat_completion", interaction_completion):
+        results = asyncio.run(run_case(case, history))
+    failures = []
+    for result in results:
+        if result.metadata.get("failure_kind") in {"provider", "capacity", "harness"}:
+            save_result("unavailable.jsonl", result.model_dump(mode="json"))
+            failures.append(f"{result.name}: unavailable ({result.metadata['failure_kind']})")
+            continue
+        metrics = [RoutingCorrectnessMetric()]
+        if result.metadata.get("expected_delegations") or result.metadata.get("response_requirements"):
+            metrics.append(InstructionFidelityMetric())
+        try:
+            assert_test(result, metrics=metrics, run_async=False)
+        except Exception as exc:
+            if not isinstance(exc, AssertionError):
+                save_result("judge_errors.jsonl", {"case": result.name, "error": str(exc)})
+            failures.append(f"{result.name}: {exc}")
+        finally:
+            save_result("turns.jsonl", {"result": result.model_dump(mode="json"), "metrics": [
+                {"name": metric.__name__, "score": getattr(metric, "score", None),
+                 "reason": getattr(metric, "reason", None)} for metric in metrics
+            ]})
+    assert not failures, "\n".join(failures)
+
+
+__all__ = ["run_case", "evaluate_live_case"]

@@ -17,8 +17,8 @@ from .cases import (
     smoke_cases,
     standard_cases,
 )
-from .harness import run_case
-from .metrics import InstructionFidelityMetric, RoutingCorrectnessMetric
+from .harness import evaluate_live_case, run_case
+from .metrics import RoutingCorrectnessMetric
 from .stress_cases import stress_cases
 
 
@@ -130,36 +130,6 @@ def test_missing_created_agent_dependency_is_recorded(monkeypatch: pytest.Monkey
     assert "required prior agent was not created" in metric.reason
 
 
-def _evaluate_live_case(case) -> None:
-    from unittest.mock import patch
-    from .provider import MODEL, context_limits, verify_context_limit, interaction_completion, save_result
-    if "stress" in case.tags and MODEL not in context_limits:
-        asyncio.run(verify_context_limit(MODEL))
-    with patch("server.agents.interaction_agent.runtime.request_chat_completion", interaction_completion):
-        results = asyncio.run(run_case(case))
-    failures = []
-    for result in results:
-        if result.metadata.get("failure_kind"):
-            save_result("unavailable.jsonl", result.model_dump(mode="json"))
-            failures.append(f"{result.name}: unavailable ({result.metadata['failure_kind']})")
-            continue
-        metrics = [RoutingCorrectnessMetric()]
-        if result.metadata.get("expected_delegations") or result.metadata.get("response_requirements"):
-            metrics.append(InstructionFidelityMetric())
-        try:
-            assert_test(result, metrics=metrics, run_async=False)
-        except Exception as exc:
-            if not isinstance(exc, AssertionError):
-                save_result("judge_errors.jsonl", {"case": result.name, "error": str(exc)})
-            failures.append(f"{result.name}: {exc}")
-        finally:
-            save_result("turns.jsonl", {"result": result.model_dump(mode="json"), "metrics": [
-                {"name": metric.__name__, "score": getattr(metric, "score", None),
-                 "reason": getattr(metric, "reason", None)} for metric in metrics
-            ]})
-    assert not failures, "\n".join(failures)
-
-
 def suite_parameters():
     full = {case.name for case in full_cases() + stress_cases()}
     smoke = {case.name for case in smoke_cases()}
@@ -181,4 +151,4 @@ def suite_parameters():
 def test_live_routing(case) -> None:
     if not os.getenv("RUN_LIVE_EVALS"):
         pytest.skip("set RUN_LIVE_EVALS=1 to call the interaction model")
-    _evaluate_live_case(case)
+    evaluate_live_case(case)

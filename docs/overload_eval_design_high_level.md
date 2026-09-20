@@ -8,7 +8,7 @@ The full suite contains 99 scenarios: 25 development cases, six held-out cases, 
 
 Coverage includes creation and reuse, multiple tasks, conversation and summary context, follow-up ownership, execution-worker updates, similar names, and decisions requiring no delegation. Generated variants vary roster size, semantic-neighbor density, target position, and fixed-seed ordering. Eight stress seeds run at 10, 100, and 1,000 agents with nested rosters and unchanged requests.
 
-Names are the production routing addresses. Exact duplicates cannot identify separate agents. Expected owners must be inferable from the visible roster and conversation; no Gmail integration or downstream work is required.
+Names are the production routing addresses. Exact duplicates cannot identify separate agents. Baseline expected owners must be inferable from roster information and conversation; an implementation may retrieve roster information through tools. No Gmail integration or downstream work is required.
 
 Held-out cases provide additional wording and combinations. They have been evaluated in the baseline and should not be described as permanently unseen. Regression cases initially remain empty and can later hold minimal reproductions.
 
@@ -28,4 +28,4 @@ A useful improvement preserves routing quality while reducing context and cost. 
 
 ## Execution levels
 
-Smoke selects 12 scenarios; standard selects 29; full selects 99, including the 24 stress cases. Grader-live runs only judge validation. Live runs are explicitly enabled and sequential. Offline tests validate the harness and graders without provider calls. Recorded results belong in a separate baseline report.
+Smoke selects 12 scenarios; standard selects 29; full selects 99, including the 24 stress cases. Grader-live runs only judge validation. Live runs are explicitly enabled and sequential. Offline tests validate the harness and graders without provider calls. Six additional inspection cases exercise recorded execution-agent history without changing the standard/full collections. Recorded results belong in separate baseline or iteration reports.
