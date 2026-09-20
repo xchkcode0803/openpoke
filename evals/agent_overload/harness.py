@@ -302,7 +302,8 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
                     "expected_action": turn.expected_action,
                     "expected_delegations": expected,
                     "response_requirements": list(turn.response_requirements),
-                    "roster_before": roster_before,
+                    "roster_before": roster_before if not any(tag.startswith("routing_") for tag in case.tags) else None,
+                    "roster_count": len(roster_before),
                     "actual_model": settings.interaction_agent_model,
                     "worker_dispatches": batch_manager.calls[:],
                     "runtime_success": result.success,
@@ -352,7 +353,7 @@ def evaluate_live_case(case, history=None) -> None:
         results = asyncio.run(run_case(case, history))
     failures = []
     for result in results:
-        if result.metadata.get("failure_kind") in {"provider", "capacity", "harness"}:
+        if result.metadata.get("failure_kind") in {"provider", "capacity", "harness", "budget"}:
             save_result("unavailable.jsonl", result.model_dump(mode="json"))
             failures.append(f"{result.name}: unavailable ({result.metadata['failure_kind']})")
             continue
