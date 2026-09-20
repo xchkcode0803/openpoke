@@ -16,7 +16,7 @@ from .provider import MODEL, paced_post, save_result
 
 
 JEV_MODEL = "typesafe/jev-1.13"
-FALLBACK_MODEL = MODEL
+FALLBACK_MODEL = "anthropic/claude-sonnet-4"
 JEV_YES_THRESHOLD = 0.90
 JEV_NO_THRESHOLD = 0.10
 

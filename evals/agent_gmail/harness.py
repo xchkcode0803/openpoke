@@ -52,7 +52,7 @@ async def _run(case, config, completion, root, emulator, recorder, record):
         "execution_agent_search_model": config.search_model,
         "conversation_summary_threshold": 0,
     })
-    manager = ExecutionBatchManager()
+    manager = ExecutionBatchManager(timeout_seconds=config.worker_timeout)
     adapter = GmailAdapter(emulator, case.faults, recorder.emit)
     owned_tasks = set()
     loop = asyncio.get_running_loop()

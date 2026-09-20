@@ -1,5 +1,6 @@
 """Eval-only shared pacing and bounded rate-limit retries."""
 import asyncio
+import os
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -9,7 +10,16 @@ from pathlib import Path
 from uuid import uuid4
 import json
 
-MODEL = "anthropic/claude-sonnet-4"
+MODEL = os.getenv("EVAL_CANDIDATE_MODEL", "anthropic/claude-sonnet-4")
+
+
+def request_interval():
+    """Only the Gemini comparison removes fixed pacing; retries remain bounded."""
+    return 0.0 if MODEL == "google/gemini-3.8-flash" else 4.1
+
+
+_gate = None
+_gate_loop = None
 _next_request = 0.0
 _post = httpx.AsyncClient.post
 context_limits: dict[str, int] = {}
@@ -72,17 +82,21 @@ def retry_delay(value: str | None, attempt: int) -> float:
 
 
 async def paced_post(client, url, **kwargs):
-    global _next_request
+    global _next_request, _gate, _gate_loop
     if not str(url).startswith("https://openrouter.ai/"):
         return await _post(client, url, **kwargs)
+    loop = asyncio.get_running_loop()
+    if _gate_loop is not loop:
+        _gate_loop, _gate = loop, asyncio.Lock()
     request_seconds = 0.0
     pacing_seconds = 0.0
     retry_wait_seconds = 0.0
     for attempt in range(4):
         before_wait = time.monotonic()
-        await asyncio.sleep(max(0, _next_request - before_wait))
+        async with _gate:
+            await asyncio.sleep(max(0, _next_request - time.monotonic()))
+            _next_request = time.monotonic() + request_interval()
         pacing_seconds += time.monotonic() - before_wait
-        _next_request = time.monotonic() + 4.1
         reservation = request_budget.reserve(kwargs["json"]) if request_budget else None
         if request_budget:
             budget_wait = time.monotonic()

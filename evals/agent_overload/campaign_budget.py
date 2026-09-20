@@ -63,7 +63,8 @@ class CampaignBudget:
             if committed + maximum > self.cap:
                 raise BudgetStopped(f'Budget limit: {committed} committed + {maximum} reservation exceeds {self.cap}')
             not_before = max(time.time(), state.get('next_request_at', 0))
-            state['next_request_at'] = not_before + 4.1
+            from .provider import request_interval
+            state['next_request_at'] = not_before + request_interval()
             state['requests'].append({'case': self.case_name, 'not_before': not_before, 'id': identifier, 'model': model, 'reserved': str(maximum),
                                       'charged': str(maximum), 'status': 'reserved'})
         return identifier
@@ -104,7 +105,7 @@ class CampaignBudget:
             row.update(status='settled', charged=str(charge), usage=usage)
 
 
-def initialize_prices(directory):
+def initialize_prices(directory, models=None):
     """Snapshot current public endpoint prices, including the highest price tier."""
     import httpx
     from datetime import datetime, timezone
@@ -112,7 +113,7 @@ def initialize_prices(directory):
     directory.mkdir(parents=True, exist_ok=True)
     prices = {}
     raw = {}
-    for model in ('anthropic/claude-sonnet-4', 'typesafe/jev-1.13'):
+    for model in dict.fromkeys(models or ('anthropic/claude-sonnet-4', 'typesafe/jev-1.13')):
         response = httpx.get(f'https://openrouter.ai/api/v1/models/{model}/endpoints', timeout=60)
         response.raise_for_status()
         raw[model] = response.json()

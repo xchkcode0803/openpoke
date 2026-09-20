@@ -15,8 +15,9 @@ class BudgetExceeded(RuntimeError):
 
 
 class Provider:
-    def __init__(self, config):
+    def __init__(self, config, transport=None):
         self.config = config
+        self.transport = transport
         self.calls = []
         self.metadata = []
         self.known_cost = 0.0
@@ -51,11 +52,15 @@ class Provider:
         started = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=60) as client:
-                for attempt in range(4):
-                    response = await client.post("https://openrouter.ai/api/v1/chat/completions",
+                for attempt in range(1 if self.transport else 4):
+                    async def post(url, **options):
+                        if self.transport:
+                            return await self.transport(client, url, **options)
+                        return await client.post(url, **options)
+                    response = await post("https://openrouter.ai/api/v1/chat/completions",
                                                  headers={"Authorization": "Bearer " + os.environ["OPENROUTER_API_KEY"]}, json=payload)
-                    call["attempts"].append({"status": response.status_code})
-                    if response.status_code != 429 or attempt == 3:
+                    call["attempts"].append({"status": response.status_code, **response.extensions.get("eval_timing", {})})
+                    if self.transport or response.status_code != 429 or attempt == 3:
                         break
                     delay = response.headers.get("Retry-After", "")
                     await asyncio.sleep(min(float(delay) if delay.isdigit() else 2 ** attempt, 30))

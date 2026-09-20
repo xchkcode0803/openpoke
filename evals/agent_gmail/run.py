@@ -63,8 +63,10 @@ async def run(args):
     import evals.agent_overload.metrics as shared_judges
     cases = select_cases(args.suite, args.case)
     config = EvalConfig(args.interaction_model, args.execution_model, args.search_model,
-                        repetitions=args.repetitions, budget=args.budget)
-    provider = Provider(config)
+                        repetitions=args.repetitions, budget=args.budget,
+                        turn_timeout=getattr(args, "turn_timeout", 180),
+                        worker_timeout=getattr(args, "worker_timeout", 90))
+    provider = Provider(config, transport=getattr(args, "transport", None))
     await provider.verify()
     output = Path(args.output or f".deepeval/gmail/{time.strftime('%Y%m%dT%H%M%S')}-{uuid4().hex[:8]}")
     output.mkdir(parents=True, exist_ok=False)

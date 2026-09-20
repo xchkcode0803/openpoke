@@ -14,3 +14,4 @@ class EvalConfig:
     turn_timeout: float = 180
     repetitions: int = 1
     budget: float | None = None
+    worker_timeout: float = 90
