@@ -6,7 +6,9 @@ import hashlib
 from pathlib import Path
 import statistics
 
-from .run import COLLECTIONS, MODELS
+from .run import MODELS
+
+COLLECTIONS = ("gmail", "routing")
 
 EXPECTED = {'gmail': 40, 'routing': 99, 'inspection': 6, 'scale': 48, 'challenge': 36}
 
@@ -81,6 +83,7 @@ def routing(directory, collection):
         'ledger_charges': sum(float(r['charged']) for r in ledger['requests']) if ledger else None,
         'unresolved_reservations': [r['id'] for r in ledger['requests'] if r['status'] in {'reserved', 'unresolved'}] if ledger else [],
         'cases': details,
+        'initial_contracts': {t['result']['metadata']['case_name']: hashlib.sha256(json.dumps({k: t['result']['metadata']['model_calls'][0][k] for k in ('system', 'tools')}, sort_keys=True).encode()).hexdigest() for t in turns if t['result']['metadata'].get('turn_index') == 0 and t['result']['metadata'].get('model_calls')},
     }
     passed = summary['outcomes'].get('pass', 0)
     summary['cost_per_success'] = summary['agent_cost'] / passed if passed and summary['agent_cost'] is not None else None
@@ -140,6 +143,9 @@ def collect(root):
     for model in MODELS:
         result[model] = {}
         for collection in COLLECTIONS:
+            if model == 'sonnet' and collection == 'routing':
+                result[model][collection] = json.loads((Path(__file__).parent / 'baselines' / 'sonnet_routing.json').read_text())
+                continue
             directory = root / model / collection
             manifest = directory / 'comparison.json'
             if not manifest.exists():
@@ -154,12 +160,17 @@ def collect(root):
             summary.update(manifest=compact, artifacts=str(directory.resolve()),
                            not_run=max(0, EXPECTED[collection] - summary['scenarios']))
             result[model][collection] = summary
+    audit = root / 'audit_notes.json'
+    result['audit_notes'] = json.loads(audit.read_text()) if audit.exists() else []
     result['paired'] = {}
     for collection in COLLECTIONS:
         left, right = result['sonnet'].get(collection), result['gemini'].get(collection)
         if not left or not right or 'cases' not in left or 'cases' not in right:
             continue
-        if left['manifest']['source_manifest_sha256'] != right['manifest']['source_manifest_sha256']:
+        if left['manifest'].get('historical'):
+            if left['initial_contracts'] != right['initial_contracts']:
+                raise ValueError('Published routing baseline prompt/schema contracts differ from candidate')
+        elif left['manifest']['source_manifest_sha256'] != right['manifest']['source_manifest_sha256']:
             raise ValueError(f'Cannot compare changed production/eval sources: {collection}')
         baseline = {r['case']: r['outcome'] for r in left['cases']}
         candidate = {r['case']: r['outcome'] for r in right['cases']}
@@ -180,7 +191,7 @@ def money(value):
 
 def markdown(data):
     text = ['# Agent evaluation report', '',
-        'Measurements on the integrated main application. Sonnet 4 is the baseline; Gemini Flash is the candidate. '
+        'Sonnet 4 is the baseline; Gemini Flash is the candidate. Gmail uses the completed 40-case Sonnet run; routing uses the published 95/99 Sonnet result in [agent roster search results](agent_roster_search_results.md). '
         'Cases, expected outcomes, production prompts, tool schemas, and graders are unchanged between candidates.', '',
         '| Collection | Model | Pass / expected | Failed | Unavailable | Not run | Agent cost | Judge cost | Agent cost / success |',
         '|---|---|---:|---:|---:|---:|---:|---:|---:|']
@@ -197,6 +208,10 @@ def markdown(data):
         text[2:2] = ['**Incomplete comparison.** Some collections have not finished. Production model defaults have not been switched.', '']
     for collection, pairs in data.get('paired', {}).items():
         text += ['', f"{collection}: {len(pairs['improvements'])} improvements, {len(pairs['regressions'])} regressions, {len(pairs['unavailable_pairs'])} unavailable pairs."]
+    if data.get('audit_notes'):
+        text += ['', '## Audit qualifications', '', 'Primary scores remain frozen. These notes distinguish confirmed behavior from questionable judgments and coverage assumptions.', '']
+        for note in data['audit_notes']:
+            text += [f"- **{note['model']} / {note['case']}: {note['classification']}.** {note['evidence']} {note['treatment']}"]
     text += ['', '## Latency', '',
         'Cumulative HTTP/wait totals can overlap for concurrent Gmail workers. The median unit is a complete Gmail scenario or one routing turn, excluding judging.', '',
         '| Collection | Model | Median unit, seconds | Cumulative HTTP | Fixed pacing | Retry waits |',
@@ -210,13 +225,13 @@ def markdown(data):
             median = 'unknown' if s.get('latency_median') is None else f"{s['latency_median']:.2f}"
             text.append(f"| {collection} | {model} | {median} | {t['request_seconds']:.2f} | {t['pacing_seconds']:.2f} | {t['retry_wait_seconds']:.2f} |")
     text += ['', '## Interpretation and controls', '',
-        '- Each case has one attempt per candidate. These authored cases are not an estimate of population reliability.',
+        '- Scores use one completed run per case. These authored cases are not an estimate of population reliability. Gmail provider-interrupted work is retained separately in operational costs.',
         '- Gmail executes real workers and nested email search against local Vercel Emulate 0.11.2. Routing uses the existing stub workers; it measures routing, not task execution.',
         '- Sonnet has 4.1-second fixed pacing; Gemini has no fixed pacing. Both retain bounded reactive rate-limit retries. HTTP duration includes provider/network time. Wall-clock savings include the removal of deliberate waiting.',
-        '- Gmail uses equal 600-second worker and 900-second turn transport allowances. Production iteration limits and existing routing resource limits remain unchanged.',
+        '- Gmail uses equal 600-second worker and 900-second turn transport allowances. Production iteration limits remain unchanged; these measurements do not establish compliance with the shorter production worker timeout.',
         '- Judges remain Jev 1.13 with Sonnet 4 fallback for both candidates. Semantic verdicts cannot override deterministic Gmail failures.',
         '- Contacts and uploaded attachments remain outside Gmail coverage. Correct preview text without a required saved mailbox draft fails draft-state expectations.',
-        '- Historical Gmail measurements in `gmail_eval_validation.md` and the prior paced Sonnet run predate the merged routing implementation; they are not the primary comparison here.',
+        '- Earlier Gmail measurements predate the merged routing implementation and are not used in this comparison. The original Gmail branch and raw traces preserve that history.',
         '- Summarization and classification have separate focused sanity checks, not comprehensive coverage from these benchmarks.', '',
         '## Failure evidence and artifacts', '']
     for model in MODELS:
@@ -231,7 +246,8 @@ def markdown(data):
             for case in s['cases']:
                 if case['outcome'] != 'pass':
                     reasons = [f.get('name', f.get('reason', str(f))) for f in case['failures']]
-                    text.append(f'- `{case["case"]}`: {case["outcome"]}; ' + '; '.join(reasons))
+                    reasons += sorted({f"semantic {a.get('category', 'check')}" for a in case.get('semantic_failures', [])})
+                    text.append(f'- `{case["case"]}`: {case["outcome"]}; ' + ('; '.join(reasons) or 'see saved grading evidence'))
             text.append('')
     return '\n'.join(text)
 

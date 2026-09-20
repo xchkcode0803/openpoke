@@ -1,4 +1,9 @@
-# Current-main model comparison
+# Gmail and routing model comparison
+
+The report compares one 40-case Gmail run and one 99-case routing run per model.
+Sonnet's routing result is the published 95/99 baseline from
+`docs/agent_roster_search_results.md`; its compact trace-derived snapshot is in
+`baselines/sonnet_routing.json`. Sonnet's Gmail result is the fresh 40-case run.
 
 Run from the repository root with dependencies from `evals/requirements.txt` and
 `npm ci --prefix evals/agent_gmail/emulate`. The launcher reads the local `.env`
@@ -6,53 +11,45 @@ Run from the repository root with dependencies from `evals/requirements.txt` and
 
 ```bash
 OPENROUTER_API_KEY=offline-placeholder python -m pytest evals -m 'not live and not routing_capacity'
-python -m evals.model_comparison.run --model sonnet --collection scale --preflight
-python -m evals.model_comparison.run --model sonnet --collection challenge --preflight
-RUN_LIVE_EVALS=1 python -m evals.model_comparison.run --model sonnet --collection gmail
-RUN_LIVE_EVALS=1 python -m evals.model_comparison.run --model sonnet --collection routing
-RUN_LIVE_EVALS=1 python -m evals.model_comparison.run --model sonnet --collection inspection
-RUN_LIVE_EVALS=1 python -m evals.model_comparison.run --model sonnet --collection scale
-RUN_LIVE_EVALS=1 python -m evals.model_comparison.run --model sonnet --collection challenge
+RUN_LIVE_EVALS=1 python -m evals.model_comparison.run --model gemini --collection gmail
+RUN_LIVE_EVALS=1 python -m evals.model_comparison.run --model gemini --collection routing
+python -m evals.model_comparison.report
 ```
 
-Repeat the five live commands with `--model gemini` once. Large collections perform
-missing local capacity preflights before paid execution. Model IDs are explicit;
-production defaults do not affect either baseline. Each collection runs in a fresh
-process; do not parallelize paid commands. The default artifact root is
-`.deepeval/comparison-main-v1`. Existing live manifests block accidental reruns.
+Run paid commands sequentially. Existing live manifests prevent accidental
+resampling. `--root` selects an explicit new experiment directory. The default is
+`.deepeval/comparison-main-v1`. To reproduce Sonnet in a future experiment, use
+`--model sonnet`; no new Sonnet routing run is needed for this report.
 
-Sonnet uses 4.1-second fixed request spacing; Gemini uses zero fixed spacing in
-both the HTTP wrapper and persistent ledger. Four-attempt rate-limit handling
-remains. All application roles participating in Gmail use the selected model.
-Both models use the same Gmail 600-second worker and 900-second turn transport
-allowances. Production iteration limits and the routing campaign's 300-second,
-4-GiB process limits remain unchanged. Judges stay Jev 1.13 with Sonnet 4 fallback.
+Gemini uses zero fixed spacing in both the HTTP wrapper and persistent ledger.
+Sonnet's reproducible transport profile keeps 4.1-second spacing. Four-attempt
+rate-limit handling remains. All three application roles participating in Gmail
+use the selected candidate. Both candidates use the same Gmail 600-second worker
+and 900-second turn transport allowances. Production iteration limits are unchanged.
+Judges stay Jev 1.13 with Sonnet 4 fallback.
 
-The default spending limit is $10 per collection, configurable downward with
-`--budget`. Routing uses conservative persistent reservations for agent and judge
-requests. Gmail uses its existing measured-charge cap, which can overshoot by
-in-flight requests; missing charges stop subsequent work. These limits are not an
-estimate or a target spend. Do not create a new directory to bypass a stopped cap.
-Unavailable/provider/budget outcomes remain in the report.
+The default limit is $10 per collection, configurable downward with `--budget`.
+Routing uses persistent conservative reservations for agent and judge calls.
+Gmail uses its existing measured-charge cap, which can overshoot by in-flight
+requests; missing charges stop subsequent work. Do not start a new directory to
+bypass an exhausted cap. The routing launcher directly calls the existing evaluator
+so its artifact and budget settings remain scoped to the same module instances.
 
-Reports distinguish observed candidate failures from unavailable measurements.
-HTTP duration includes provider/network latency, not pure inference time; report
-fixed pacing and retries separately. Historical Gmail results predate current
-routing and are not the primary paired comparison.
+## Recovery and reporting
 
-## Interrupted runs
+After resolving a diagnosed external interruption, Gmail supports `--resume`.
+It verifies model/source identity, retains completed cases, subtracts earlier
+charges from the original cap, and regrades DNS-interrupted judge evidence without
+agent replay. A case interrupted by HTTP 402 may restart, preserving its partial
+trace and charges separately. Unknown in-flight charges require reconciliation.
+Never lower output limits to bypass a provider credit reservation.
 
-The live comparison encountered laptop-sleep DNS failures and an OpenRouter key
-credit-limit rejection. Preserve these artifacts. `--resume` is available for
-Gmail only, after resolving the external cause. It verifies the original model and
-source fingerprints, retains completed cases, subtracts all earlier known charges
-from the original cap, and regrades DNS-interrupted judge evidence without agent
-replay. A case interrupted by an explicit HTTP 402 may restart; its partial trace
-and charges are recorded separately. Unknown in-flight charges require manual
-reconciliation and cannot be bypassed with a new output directory. Do not lower
-model output limits to work around provider credit reservations.
+The report checks the historical routing baseline's first-turn prompt/schema
+contracts against the candidate and keeps unavailable outcomes separate. Optional
+manual audit notes under the artifact root are embedded in the report without
+changing frozen scores. Reporting flags are not all confirmed false statements.
+Mailbox authorization failures have independent mutation evidence.
 
-The routing launcher calls the existing `evaluate_live_case` directly, just as
-the million-agent child does. This avoids pytest loading a second package identity
-and bypassing scoped provider/artifact/budget settings. A regression verifies this
-boundary and stopping on an unsettled ledger.
+HTTP durations include provider/network time; fixed pacing and retries are reported
+separately. The published routing baseline was measured at a different time. These
+are single-run observations, not reliability estimates or isolated latency trials.

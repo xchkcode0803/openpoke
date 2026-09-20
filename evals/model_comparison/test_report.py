@@ -39,3 +39,17 @@ def test_campaign_resource_failure_has_no_fake_pass(tmp_path):
     result = routing(tmp_path, 'scale')
     assert result['scenarios'] == 1
     assert result['outcomes'] == {'unavailable': 1}
+
+
+def test_report_uses_published_sonnet_routing_baseline(tmp_path):
+    from .report import collect
+    unused = tmp_path / 'sonnet' / 'routing'
+    unused.mkdir(parents=True)
+    (unused / 'comparison.json').write_text('This directory must not be used for the report')
+    result = collect(tmp_path)
+    baseline = result['sonnet']['routing']
+    assert baseline['outcomes'] == {'pass': 95, 'agent_failure': 4}
+    assert baseline['agent_cost'] == 1.695717
+    assert baseline['manifest']['historical'] is True
+    assert len(baseline['initial_contracts']) == 99
+    assert set(result['sonnet']) == {'routing'}

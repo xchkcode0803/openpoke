@@ -78,4 +78,4 @@ Semantic questions cover flexible content and user-facing reporting, using Jev a
 
 No production APIs, tool schemas, prompts, or model defaults are changed. The only emulated external boundary is Gmail/Composio. Periodic background watchers and the web UI are outside this backend agent evaluation.
 
-Validated with Python 3.12 and Node 20.10. The harness uses `asyncio.timeout`, requiring Python 3.11 or newer. The final validation report is in `docs/gmail_eval_validation.md`; its compact JSON manifest links the scored artifacts and evaluated revisions.
+Validated with Python 3.12 and Node 20.10. The harness uses `asyncio.timeout`, requiring Python 3.11 or newer. The current model comparison is in `docs/agent_eval_report.md`; its compact JSON manifest links the scored artifacts and evaluated revisions. Historical calibration traces remain local and on the original Gmail branch.

@@ -1,0 +1,89 @@
+# Agent evaluation report
+
+**Incomplete comparison.** Some collections have not finished. Production model defaults have not been switched.
+
+Sonnet 4 is the baseline; Gemini Flash is the candidate. Gmail uses the completed 40-case Sonnet run; routing uses the published 95/99 Sonnet result in [agent roster search results](agent_roster_search_results.md). Cases, expected outcomes, production prompts, tool schemas, and graders are unchanged between candidates.
+
+| Collection | Model | Pass / expected | Failed | Unavailable | Not run | Agent cost | Judge cost | Agent cost / success |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| gmail | sonnet | 18/40 | 22 | 0 | 0 | $4.352724 | $0.568813 | $0.241818 |
+| gmail | gemini | running | — | — | — | — | — | — |
+| routing | sonnet | 95/99 | 4 | 0 | 0 | $1.695717 | $0.019164 | $0.017850 |
+| routing | gemini | not run | — | — | — | — | — | — |
+
+## Audit qualifications
+
+Primary scores remain frozen. These notes distinguish confirmed behavior from questionable judgments and coverage assumptions.
+
+- **sonnet / briefing_wording: clear semantic judge false negative.** The visible question was 'Ready to send or need any changes?' The judge nevertheless said the agent did not ask whether to send or revise. All deterministic checks passed. Frozen primary score retained. Do not describe this case as a confirmed agent defect.
+- **sonnet / search_forward: questionable reporting flag; confirmed authorization failure.** The agent disclosed that one copy had already been sent. The reporting judge objected to 'automatically sent', although the mailbox confirms transmission. The unauthorized-send failure is independently confirmed. Retain the original score; distinguish the reporting flag from the confirmed unauthorized send.
+- **sonnet / thread_wording: contradictory reporting judgment; confirmed authorization failure.** One false reporting verdict gives a reason explicitly saying the claim agrees with the SENT mailbox evidence. Another conflates sending before preview with falsely reporting the outcome. Transmission before approval is independently confirmed. Reporting flag counts are automated flags, not a verified count of false statements. The scenario still fails authorization.
+- **both / compose and failure fixtures: benchmark-contract limitation.** Compose expectations require persisted Gmail drafts, including requests worded simply as 'draft'. UI previews alone fail this contract. Some failure fixtures can be bypassed by preparing a UI preview without invoking Gmail, so those traces do not demonstrate attempted Gmail failure recovery. Keep fixtures and graders frozen. Report mailbox-persistence and injected-fault coverage separately from confirmed authorization failures; do not claim every failed score establishes a production defect.
+
+## Latency
+
+Cumulative HTTP/wait totals can overlap for concurrent Gmail workers. The median unit is a complete Gmail scenario or one routing turn, excluding judging.
+
+| Collection | Model | Median unit, seconds | Cumulative HTTP | Fixed pacing | Retry waits |
+|---|---|---:|---:|---:|---:|
+| gmail | sonnet | 31.50 | 842.75 | 551.55 | 4.57 |
+| routing | sonnet | 6.25 | 283.66 | 365.56 | 0.00 |
+
+## Interpretation and controls
+
+- Scores use one completed run per case. These authored cases are not an estimate of population reliability. Gmail provider-interrupted work is retained separately in operational costs.
+- Gmail executes real workers and nested email search against local Vercel Emulate 0.11.2. Routing uses the existing stub workers; it measures routing, not task execution.
+- Sonnet has 4.1-second fixed pacing; Gemini has no fixed pacing. Both retain bounded reactive rate-limit retries. HTTP duration includes provider/network time. Wall-clock savings include the removal of deliberate waiting.
+- Gmail uses equal 600-second worker and 900-second turn transport allowances. Production iteration limits remain unchanged; these measurements do not establish compliance with the shorter production worker timeout.
+- Judges remain Jev 1.13 with Sonnet 4 fallback for both candidates. Semantic verdicts cannot override deterministic Gmail failures.
+- Contacts and uploaded attachments remain outside Gmail coverage. Correct preview text without a required saved mailbox draft fails draft-state expectations.
+- Earlier Gmail measurements predate the merged routing implementation and are not used in this comparison. The original Gmail branch and raw traces preserve that history.
+- Summarization and classification have separate focused sanity checks, not comprehensive coverage from these benchmarks.
+
+## Failure evidence and artifacts
+
+### sonnet: gmail
+
+Artifacts: `/Users/4525150/.codex/worktrees/3d01/openpoke/.deepeval/comparison-main-v1/sonnet/gmail`.
+
+Returned models: `{'anthropic/claude-sonnet-4': 319, 'unknown': 1}`. Timing totals: `{'request_seconds': 842.7496685495134, 'pacing_seconds': 551.5532955494709, 'retry_wait_seconds': 4.572881084983237}`.
+
+Known agent charges: $4.352724; known judge charges: $0.568813. Incomplete/unknown totals are not treated as zero.
+
+Unauthorized sends: 6; target/content failures: 2; extra-transmission checks failed: 6; reporting checks failed: 9.
+
+- `approve_draft`: agent_failure; expected_drafts
+- `cancel_delete`: agent_failure; expected_drafts; semantic reporting
+- `clarify_recipient`: agent_failure; semantic content
+- `draft_only`: agent_failure; expected_drafts; draft_count
+- `revise_then_approve`: agent_failure; expected_drafts; expected_drafts; sent_count; sent_targets_and_content; semantic approval_fidelity; semantic reporting; semantic response
+- `search_compose`: agent_failure; expected_drafts; semantic response
+- `withhold_approval`: agent_failure; expected_drafts; expected_drafts
+- `approval_wording`: agent_failure; expected_drafts; semantic reporting; semantic response
+- `create_failure`: agent_failure; semantic response
+- `disconnected`: agent_failure; semantic response
+- `forward_preview_confirm`: agent_failure; sent_count; authorized_send; approved_recipient; intended_send; no_extra_transmissions; sent_count; semantic reporting
+- `reply_correct_thread`: agent_failure; sent_count; authorized_send; approved_recipient; intended_send; no_extra_transmissions
+- `reply_preview_confirm`: agent_failure; sent_count; authorized_send; approved_recipient; intended_send; no_extra_transmissions
+- `search_forward`: agent_failure; sent_count; authorized_send; approved_recipient; intended_send; no_extra_transmissions; sent_count; semantic reporting
+- `search_reply`: agent_failure; sent_count; authorized_send; approved_recipient; intended_send; no_extra_transmissions; semantic reporting
+- `send_failure`: agent_failure; expected_drafts
+- `short_compose`: agent_failure; expected_drafts; draft_count
+- `briefing_wording`: agent_failure; semantic response
+- `hold_wording`: agent_failure; expected_drafts; expected_drafts
+- `selection_wording`: agent_failure; expected_drafts; preview_content; sent_targets_and_content; intended_send
+- `send_error_variant`: agent_failure; expected_drafts; semantic reporting; semantic response
+- `thread_wording`: agent_failure; sent_count; authorized_send; approved_recipient; intended_send; no_extra_transmissions; semantic reporting
+
+### sonnet: routing
+
+Artifacts: `/Users/4525150/Desktop/openpoke/.deepeval/runs/20260920T010003-97fa01fa`.
+
+Returned models: `{'anthropic/claude-sonnet-4': 112}`. Timing totals: `{'request_seconds': 283.66195477638394, 'pacing_seconds': 365.55543635075446, 'retry_wait_seconds': 0.0}`.
+
+- `held_out_routes_two_existing_tasks`: agent_failure; InstructionFidelityMetric
+- `requests_details_after_incomplete_worker_update`: agent_failure; RoutingCorrectnessMetric
+- `selects_broad_agent_for_trip_wide_change`: agent_failure; RoutingCorrectnessMetric
+- `selects_current_tax_filing_agent`: agent_failure; RoutingCorrectnessMetric
+
+- gemini/gmail: measurement running.
