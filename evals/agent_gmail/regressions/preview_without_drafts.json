@@ -1,0 +1,65 @@
+{
+  "source": "development-01/select_pending_draft, first turn",
+  "expected_failure": "expected_drafts",
+  "record": {
+    "turns": [
+      {
+        "index": 0,
+        "before": {
+          "messages": []
+        },
+        "after": {
+          "messages": []
+        },
+        "result": {
+          "success": true,
+          "response": "Both drafts are ready for Alice and Bob. Want to make any changes, or leave them as is?",
+          "error": null,
+          "execution_agents_used": 0
+        }
+      }
+    ],
+    "events": [
+      {
+        "kind": "interaction_tool",
+        "turn": 0,
+        "name": "send_draft",
+        "arguments": {
+          "subject": "Cedar update",
+          "to": "alice@example.com",
+          "body": "Launch Friday"
+        },
+        "result": {
+          "success": true,
+          "payload": {
+            "status": "draft_recorded",
+            "to": "alice@example.com",
+            "subject": "Cedar update"
+          },
+          "user_message": null,
+          "recorded_reply": true
+        }
+      },
+      {
+        "kind": "interaction_tool",
+        "turn": 0,
+        "name": "send_draft",
+        "arguments": {
+          "subject": "Birch update",
+          "to": "bob@example.com",
+          "body": "Launch Tuesday"
+        },
+        "result": {
+          "success": true,
+          "payload": {
+            "status": "draft_recorded",
+            "to": "bob@example.com",
+            "subject": "Birch update"
+          },
+          "user_message": null,
+          "recorded_reply": true
+        }
+      }
+    ]
+  }
+}

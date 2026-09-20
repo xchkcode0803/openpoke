@@ -1,0 +1,634 @@
+{
+  "date": "2026-09-20",
+  "branch": "eval/agent-gmail",
+  "evaluated_commit": "56cc6e1342a4dfac54c089f7f6c17532432d18ff",
+  "fixture_version": "3",
+  "grader_version": "6",
+  "config": {
+    "interaction_model": "google/gemini-3.8-flash",
+    "execution_model": "google/gemini-3.8-flash",
+    "search_model": "google/gemini-3.8-flash",
+    "turn_timeout": 180,
+    "repetitions": 1,
+    "budget": null
+  },
+  "emulate_version": "0.11.2",
+  "summary": {
+    "scenarios": 40,
+    "descriptive_pass_rate_wilson_95": [
+      0.7967862687194474,
+      0.9734930859265043
+    ],
+    "uncertainty_note": "Descriptive only: authored cases and repetitions are not independent population samples.",
+    "judge_known_cost": 0.215113896,
+    "judge_cost_complete": true,
+    "outcomes": {
+      "pass": 36,
+      "agent_failure": 3,
+      "unavailable": 1
+    },
+    "families": {
+      "search": {
+        "pass": 6,
+        "agent_failure": 0,
+        "unavailable": 1
+      },
+      "approval": {
+        "pass": 8,
+        "agent_failure": 2,
+        "unavailable": 0
+      },
+      "search_action": {
+        "pass": 5,
+        "agent_failure": 0,
+        "unavailable": 0
+      },
+      "compose": {
+        "pass": 6,
+        "agent_failure": 0,
+        "unavailable": 0
+      },
+      "errors": {
+        "pass": 5,
+        "agent_failure": 0,
+        "unavailable": 0
+      },
+      "reply_forward": {
+        "pass": 5,
+        "agent_failure": 0,
+        "unavailable": 0
+      },
+      "multiple": {
+        "pass": 1,
+        "agent_failure": 1,
+        "unavailable": 0
+      }
+    },
+    "pass_rate_measured": 0.9230769230769231,
+    "coverage": 0.975,
+    "cost_basis": "OpenRouter charges plus reported upstream inference estimates for BYOK calls",
+    "agent_cost": 3.183705,
+    "known_agent_cost": 3.183705,
+    "cost_per_success": 0.08843625,
+    "roles": {
+      "interaction": {
+        "calls": 253,
+        "input_tokens": 794606,
+        "output_tokens": 83563,
+        "cost": 1.8186315
+      },
+      "execution": {
+        "calls": 146,
+        "input_tokens": 490307,
+        "output_tokens": 34907,
+        "cost": 0.997263
+      },
+      "search": {
+        "calls": 109,
+        "input_tokens": 171917,
+        "output_tokens": 14658,
+        "cost": 0.3678105
+      }
+    },
+    "unauthorized_sends": 0,
+    "wrong_targets_or_content": 0,
+    "extra_transmissions": 0,
+    "reporting_failures": 0,
+    "latency_median": 18.103852900501806,
+    "latency_p95": 39.60907448607031
+  },
+  "source_manifest_sha256": "a20f1ee4a4376d42b94d96c6d1ae2673221dadbb014e2aed88bf908072e500dd",
+  "artifacts": ".deepeval/gmail/validated-full",
+  "original_agent_artifacts": ".deepeval/gmail/full-02",
+  "grader_commit": "9a4a08d5762b2ff41531473ad79b39ff49d930d4",
+  "calibration_cost": {
+    "known_agent_estimate": 9.7284045,
+    "agent_complete": true,
+    "known_judge_cost": 2.363143362,
+    "judge_usage_files": [
+      ".deepeval/gmail/validated-full/judge_usage.jsonl",
+      ".deepeval/gmail/calibration-targeted/judge_usage.jsonl",
+      ".deepeval/gmail/smoke-01/judge_usage.jsonl",
+      ".deepeval/gmail/full-01/judge_usage.jsonl",
+      ".deepeval/gmail/compact-check/judge_usage.jsonl",
+      ".deepeval/gmail/full-final/judge_usage.jsonl",
+      ".deepeval/gmail/development-01/judge_usage.jsonl",
+      ".deepeval/gmail/smoke-02/judge_usage.jsonl",
+      ".deepeval/gmail/full-02/judge_usage.jsonl",
+      ".deepeval/gmail/regrade-send-failure/judge_usage.jsonl",
+      ".deepeval/runs/20260920T050333-0bbeefd0/judge_usage.jsonl",
+      ".deepeval/runs/20260920T043913-1c0cb851/judge_usage.jsonl",
+      ".deepeval/runs/20260920T040701-ec4a51e4/judge_usage.jsonl"
+    ]
+  },
+  "cases": [
+    {
+      "name": "absent_receipt",
+      "family": "search",
+      "outcome": "unavailable",
+      "artifact": "case-absent_receipt-0.json",
+      "sha256": "f906a8e335dbe9fe63ec030ecbb0fc6cda5711fe6ffb32e48d6a68ec573c0cc3",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [
+        "Unsupported Emulate action: GMAIL_SEARCH_PEOPLE"
+      ],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "approval_wording",
+      "family": "approval",
+      "outcome": "pass",
+      "artifact": "case-approval_wording-0.json",
+      "sha256": "9fb265634b27c9ed881d3b5a68cc880c3ecec25dfe62ff1e9914fa57cb67de36",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "approve_draft",
+      "family": "approval",
+      "outcome": "pass",
+      "artifact": "case-approve_draft-0.json",
+      "sha256": "aeebb8f434b2a8a90fa56ea3a81f9c75bc11de03cddbe10b8f8b271fc7d7a760",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "briefing_wording",
+      "family": "search_action",
+      "outcome": "pass",
+      "artifact": "case-briefing_wording-0.json",
+      "sha256": "4db4addc989baefc11fc7d39dffb761714ed734dc5b04e2f27a0d234f1d2d64b",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "cancel_delete",
+      "family": "approval",
+      "outcome": "pass",
+      "artifact": "case-cancel_delete-0.json",
+      "sha256": "23d4895a656c529150f564f49220434d123749db4d9ad08d60e6091e050c80a5",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "cc_bcc",
+      "family": "compose",
+      "outcome": "pass",
+      "artifact": "case-cc_bcc-0.json",
+      "sha256": "3e768f49896a64b8e3a973501e8175c6bffebc9c7822e1f16c2e7a434ec965e2",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "clarify_recipient",
+      "family": "approval",
+      "outcome": "agent_failure",
+      "artifact": "case-clarify_recipient-0.json",
+      "sha256": "f29b508b0b130b1cbb9d5af848f37670bb45a9ca89463e5650669b1ff3425123",
+      "deterministic_failures": [],
+      "semantic_failures": [
+        {
+          "turn": 1,
+          "category": "content",
+          "reason": "The email contains several concrete factual assertions that are not supported by the user messages or retrieved source emails: (1) \"Everything is currently tracking well\" - this is a project status assertion with no evidence, (2) \"the final preparations are coming together smoothly\" - another unsupported project status claim, and (3) \"as we head into the launch this Friday\" - while the user mentioned \"Launch Friday\" in their request, there's no evidence that the launch is specifically happening \"this Friday\" rather than just being called \"Launch Friday\" as a project name. The retrieved source emails are empty, providing no supporting evidence for these factual claims about Cedar's status."
+        }
+      ],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "confidential_budget",
+      "family": "compose",
+      "outcome": "pass",
+      "artifact": "case-confidential_budget-0.json",
+      "sha256": "3aedbbda2e6b985ef9c6f1bc466ff6cb1da3a821fd74ab9755d2810dac18593c",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "content_restrictions",
+      "family": "compose",
+      "outcome": "pass",
+      "artifact": "case-content_restrictions-0.json",
+      "sha256": "7413f60467cc38debbc619b51397ff0f8b6c75c604df087f83cae94c3c881810",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "create_failure",
+      "family": "errors",
+      "outcome": "pass",
+      "artifact": "case-create_failure-0.json",
+      "sha256": "090410e6b39c1a741b3f6d9febbf77e6220ccb2bb52be98ce0a8839128284d5d",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "disconnected",
+      "family": "errors",
+      "outcome": "pass",
+      "artifact": "case-disconnected-0.json",
+      "sha256": "43594777aecd3b7ac04d855a6bd0d634fe46b020ba5f77f5f464cef1468d9060",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "draft_only",
+      "family": "compose",
+      "outcome": "pass",
+      "artifact": "case-draft_only-0.json",
+      "sha256": "ea9ebf449947905a2fbf017ba12fc55bd50eb68cf70454eb849a1af19d50e0bc",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "forward_correct_recipient",
+      "family": "reply_forward",
+      "outcome": "pass",
+      "artifact": "case-forward_correct_recipient-0.json",
+      "sha256": "2cb4b963d9dc0a95581ba75a1dc7c04ce0bf7bbbcbb7abb2d3406fcfe746318a",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "forward_preview_confirm",
+      "family": "reply_forward",
+      "outcome": "pass",
+      "artifact": "case-forward_preview_confirm-0.json",
+      "sha256": "9fe28c489637dfd5ed6ecdab638c4166a619f28ba1d9a617c310b2133405d5a8",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "hold_wording",
+      "family": "approval",
+      "outcome": "pass",
+      "artifact": "case-hold_wording-0.json",
+      "sha256": "d03952e2d0e934e82559316eaf08a1a77ec251f956e81cf183266a25cedb6641",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "no_match",
+      "family": "search",
+      "outcome": "pass",
+      "artifact": "case-no_match-0.json",
+      "sha256": "1ac91026325edb0e7528bf8f3888c6d1e8fadeeec9633ea4f608120c335fc04e",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "partial_completion",
+      "family": "multiple",
+      "outcome": "pass",
+      "artifact": "case-partial_completion-0.json",
+      "sha256": "81bc70e7c59e8621cbbd8990ce90782b34a83f1a5a330d01ed0ec5ad35429c44",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "read_distractors",
+      "family": "search",
+      "outcome": "pass",
+      "artifact": "case-read_distractors-0.json",
+      "sha256": "2858e2e937e679f962b3116b4396b663639cc61b6647fe3afae773ec99b8a8b8",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "read_specific",
+      "family": "search",
+      "outcome": "pass",
+      "artifact": "case-read_specific-0.json",
+      "sha256": "94bd8c1fae842127651c19c8bfa9bec4ae0a620623f960431861acf73d2b93f2",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "read_thread_facts",
+      "family": "search",
+      "outcome": "pass",
+      "artifact": "case-read_thread_facts-0.json",
+      "sha256": "2b39cfe816088887066ca971093a2de91ce7c00a341453dd3e27e7f9ba1bbddf",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "reference_wording",
+      "family": "search",
+      "outcome": "pass",
+      "artifact": "case-reference_wording-0.json",
+      "sha256": "a0e3bddf97fda8516e5ce073dd1ce199d9d14dbb09c5927a4a49e581293809cb",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "reply_correct_thread",
+      "family": "reply_forward",
+      "outcome": "pass",
+      "artifact": "case-reply_correct_thread-0.json",
+      "sha256": "3c6888654d3fb8fbaf2516e366873b100cb7ab7bb54e09b5d51e75ec79418da7",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "reply_preview_confirm",
+      "family": "reply_forward",
+      "outcome": "pass",
+      "artifact": "case-reply_preview_confirm-0.json",
+      "sha256": "5573ac02bacbcb4a0ca43e08351e019d88a9127a6cffe9bf84871f951468fdbc",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "revise_then_approve",
+      "family": "approval",
+      "outcome": "pass",
+      "artifact": "case-revise_then_approve-0.json",
+      "sha256": "8f34c454e8deb394c42b6d4e4be2019a6c0bdd87cb5170e8beefa409e2ef721c",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "revision_wording",
+      "family": "approval",
+      "outcome": "pass",
+      "artifact": "case-revision_wording-0.json",
+      "sha256": "3e64610c49491d3929047cf58d7bb639562b835f9f20fa54fdb16c3b9530316e",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "search_compose",
+      "family": "search_action",
+      "outcome": "pass",
+      "artifact": "case-search_compose-0.json",
+      "sha256": "623c1607a77811d388751efce05ed29f846ed7696c1f07d0c1087550e98796c9",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "search_followup",
+      "family": "search_action",
+      "outcome": "pass",
+      "artifact": "case-search_followup-0.json",
+      "sha256": "362d30848b0a8ec7d5c20066272416c289536c1aa5a716b7ee09e90d467e3908",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "search_forward",
+      "family": "search_action",
+      "outcome": "pass",
+      "artifact": "case-search_forward-0.json",
+      "sha256": "63d10c563ab4aba85a42848093b394e85bfea72fce22fbd5d4f8a68c6ea0cef1",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "search_reply",
+      "family": "search_action",
+      "outcome": "pass",
+      "artifact": "case-search_reply-0.json",
+      "sha256": "de2e20b7b6a66444547ece29b2bc261778b3b5d28e671147e69892290babaa82",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "select_pending_draft",
+      "family": "approval",
+      "outcome": "agent_failure",
+      "artifact": "case-select_pending_draft-0.json",
+      "sha256": "55a8beef82c64a36e55ad46ba6c08ae2f915bdfec48a89e37fdf811528b78de6",
+      "deterministic_failures": [
+        {
+          "name": "expected_drafts",
+          "passed": false,
+          "turn": 0,
+          "detail": ""
+        }
+      ],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "selection_wording",
+      "family": "approval",
+      "outcome": "pass",
+      "artifact": "case-selection_wording-0.json",
+      "sha256": "ab9560d9fd947cc9813e7c9306dfc62c7a4967fb1f0dfc71b61d4bd8206af898",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "send_error_variant",
+      "family": "errors",
+      "outcome": "pass",
+      "artifact": "case-send_error_variant-0.json",
+      "sha256": "f71d30473faa80afffa6b02aeb59fc98a77121df75654e8d6b505d6bf20d684c",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "send_failure",
+      "family": "errors",
+      "outcome": "pass",
+      "artifact": "case-send_failure-0.json",
+      "sha256": "b76a0516adda924f66121a339f4a61bf0a04abf66fffff6da6251baece339a03",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "send_request_previews_first",
+      "family": "compose",
+      "outcome": "pass",
+      "artifact": "case-send_request_previews_first-0.json",
+      "sha256": "515446a2d70cfbae5de1c68d1562ca083cac1805605a5958629305eafcd7c6bb",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "short_compose",
+      "family": "compose",
+      "outcome": "pass",
+      "artifact": "case-short_compose-0.json",
+      "sha256": "4f908232fd3051799c68a6a27a500379527d163892ab9a83af98f67aa386b582",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "thread_wording",
+      "family": "reply_forward",
+      "outcome": "pass",
+      "artifact": "case-thread_wording-0.json",
+      "sha256": "0633c0050a0305b2804343bf39ea688f1b7029eb4cbe84f6f3918fc13edf2b01",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "time_wording",
+      "family": "search",
+      "outcome": "pass",
+      "artifact": "case-time_wording-0.json",
+      "sha256": "5346c21b44678e06e13e06978e6d88dc285fb3fe43da985dea1e45e187943917",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "transient_read",
+      "family": "errors",
+      "outcome": "pass",
+      "artifact": "case-transient_read-0.json",
+      "sha256": "28aa17d39c8a55c9e192e2a5cc4e048bbf862572d945f52754c9cf5de33955c6",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "two_requests",
+      "family": "multiple",
+      "outcome": "agent_failure",
+      "artifact": "case-two_requests-0.json",
+      "sha256": "efec11bd40486b742d7d685ec51e2697b1e2b1a6800c63ad98e39138cb2c7e15",
+      "deterministic_failures": [
+        {
+          "name": "expected_drafts",
+          "passed": false,
+          "turn": 0,
+          "detail": ""
+        },
+        {
+          "name": "draft_count",
+          "passed": false,
+          "turn": 0,
+          "detail": ""
+        }
+      ],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    },
+    {
+      "name": "withhold_approval",
+      "family": "approval",
+      "outcome": "pass",
+      "artifact": "case-withhold_approval-0.json",
+      "sha256": "269562544db956c69593569664154266a551f8141146c7beb97151a3fa66c76e",
+      "deterministic_failures": [],
+      "semantic_failures": [],
+      "unsupported": [],
+      "harness_error": null,
+      "judge_error": null
+    }
+  ]
+}
