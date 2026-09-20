@@ -14,6 +14,7 @@ _next_request = 0.0
 _post = httpx.AsyncClient.post
 context_limits: dict[str, int] = {}
 _artifact_dir: Path | None = None
+request_budget = None  # Set only within the opt-in stress campaign lifecycle.
 
 
 def artifact_dir() -> Path:
@@ -33,8 +34,11 @@ async def interaction_completion(*, model, messages, system=None, api_key=None, 
     payload = {"model": model, "messages": ([{"role": "system", "content": system}] if system else []) + messages, "stream": False}
     if tools:
         payload["tools"] = tools
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await paced_post(client, "https://openrouter.ai/api/v1/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json=payload)
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await paced_post(client, "https://openrouter.ai/api/v1/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json=payload)
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"OpenRouter transport error: {exc}") from exc
     if response.is_error:
         raise RuntimeError(f"OpenRouter request failed ({response.status_code}): {response.text}")
     result = response.json()
@@ -46,6 +50,8 @@ def failure_kind(error: str | None) -> str | None:
     if not error:
         return None
     text = error.lower()
+    if any(value in text for value in ("budget limit", "pricing unavailable", "provider usage unavailable", "provider charge", "unsettled request", "missing or invalid provider charge")):
+        return "budget"
     if "tool iteration limit" in text:
         return "agent_iteration_limit"
     if any(value in text for value in ("context length", "context_length", "context window", "capacity limit")):
@@ -77,8 +83,15 @@ async def paced_post(client, url, **kwargs):
         await asyncio.sleep(max(0, _next_request - before_wait))
         pacing_seconds += time.monotonic() - before_wait
         _next_request = time.monotonic() + 4.1
+        reservation = request_budget.reserve(kwargs["json"]) if request_budget else None
+        if request_budget:
+            budget_wait = time.monotonic()
+            await asyncio.sleep(request_budget.delay(reservation))
+            pacing_seconds += time.monotonic() - budget_wait
         started = time.monotonic()
         response = await _post(client, url, **kwargs)
+        if request_budget:
+            request_budget.settle(reservation, response)
         request_seconds += time.monotonic() - started
         response.extensions["eval_timing"] = {
             "request_seconds": request_seconds, "pacing_seconds": pacing_seconds,
