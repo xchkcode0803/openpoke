@@ -39,3 +39,20 @@ Reports distinguish observed candidate failures from unavailable measurements.
 HTTP duration includes provider/network latency, not pure inference time; report
 fixed pacing and retries separately. Historical Gmail results predate current
 routing and are not the primary paired comparison.
+
+## Interrupted runs
+
+The live comparison encountered laptop-sleep DNS failures and an OpenRouter key
+credit-limit rejection. Preserve these artifacts. `--resume` is available for
+Gmail only, after resolving the external cause. It verifies the original model and
+source fingerprints, retains completed cases, subtracts all earlier known charges
+from the original cap, and regrades DNS-interrupted judge evidence without agent
+replay. A case interrupted by an explicit HTTP 402 may restart; its partial trace
+and charges are recorded separately. Unknown in-flight charges require manual
+reconciliation and cannot be bypassed with a new output directory. Do not lower
+model output limits to work around provider credit reservations.
+
+The routing launcher calls the existing `evaluate_live_case` directly, just as
+the million-agent child does. This avoids pytest loading a second package identity
+and bypassing scoped provider/artifact/budget settings. A regression verifies this
+boundary and stopping on an unsettled ledger.

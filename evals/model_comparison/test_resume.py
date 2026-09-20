@@ -7,13 +7,14 @@ import pytest
 from .resume import resume_gmail
 
 
-def test_resume_preserves_completed_agents_and_original_cap(tmp_path, monkeypatch):
+@pytest.mark.parametrize('credit_rejection', [False, True])
+def test_resume_preserves_completed_agents_and_original_cap(tmp_path, monkeypatch, credit_rejection):
     from evals.agent_gmail import run, reporting
     from evals.agent_gmail.cases import select_cases
     first = select_cases('full')[0].name
     source = tmp_path / 'gmail'
     source.mkdir()
-    record = {'case': {'name': first}, 'provider_calls': [], 'judge_error': None}
+    record = {'case': {'name': first}, 'provider_calls': [{'error': 'OpenRouter HTTP 402: credit limit'}] if credit_rejection else [], 'judge_error': None}
     original = source / f'case-{first}-0.json'
     original.write_text(json.dumps(record))
     before = original.read_bytes()
@@ -30,7 +31,8 @@ def test_resume_preserves_completed_agents_and_original_cap(tmp_path, monkeypatc
         return 1  # genuine candidate failures do not trigger agent retries
     monkeypatch.setattr(run, 'run', execute)
     asyncio.run(resume_gmail(SimpleNamespace(budget=50), tmp_path, 'candidate', None))
-    assert len(scheduled) == 39 and first not in scheduled
+    assert len(scheduled) == (40 if credit_rejection else 39)
+    assert (first in scheduled) is credit_rejection
     assert original.read_bytes() == before
 
 

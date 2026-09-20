@@ -65,3 +65,37 @@ def test_gmail_shared_transport_does_not_multiply_retries(monkeypatch):
         asyncio.run(client(role='execution', model=MODELS['sonnet'], messages=[]))
     assert len(calls) == 1
     assert client.calls[0]['attempts'][0]['attempts'] == 4
+
+
+def test_routing_runner_uses_scoped_module_and_stops_on_unsettled_charge(tmp_path, monkeypatch):
+    from evals.agent_overload import harness
+    from .run import routing_collection
+    monkeypatch.setattr(provider, '_artifact_dir', tmp_path)
+    monkeypatch.setattr(provider, 'MODEL', MODELS['gemini'])
+    monkeypatch.setattr(harness, 'MODEL', MODELS['gemini'])
+    calls = []
+    def evaluate(case, history):
+        calls.append(case.name)
+        assert provider.MODEL == harness.MODEL == MODELS['gemini']
+        provider.save_result('scoped.jsonl', {'case': case.name})
+        (tmp_path / 'spend.json').write_text(json.dumps({'stopped': 'usage unknown', 'requests': []}))
+        raise AssertionError('unavailable: provider')
+    monkeypatch.setattr(harness, 'evaluate_live_case', evaluate)
+    assert routing_collection('routing', tmp_path) == 1
+    assert len(calls) == 1
+    assert (tmp_path / 'scoped.jsonl').exists()
+    assert len(json.loads((tmp_path / 'outcomes.json').read_text())) == 1
+
+
+def test_instruction_failure_mentioning_budget_does_not_stop_suite(tmp_path, monkeypatch):
+    from evals.agent_overload import cases, stress_cases, harness
+    from .run import routing_collection
+    monkeypatch.setattr(cases, 'full_cases', lambda: cases.DEVELOPMENT_CASES[:2])
+    monkeypatch.setattr(stress_cases, 'stress_cases', lambda: ())
+    calls = []
+    def evaluate(case, history):
+        calls.append(case.name)
+        raise AssertionError('missing required fact: budget of $200')
+    monkeypatch.setattr(harness, 'evaluate_live_case', evaluate)
+    assert routing_collection('routing', tmp_path) == 1
+    assert len(calls) == 2

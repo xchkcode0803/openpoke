@@ -30,7 +30,7 @@ def main():
     parser.add_argument('--root', default='.deepeval/comparison-main-v1')
     parser.add_argument('--budget', type=float, default=10)
     parser.add_argument('--preflight', action='store_true')
-    parser.add_argument('--resume', action='store_true', help='Continue Gmail after a diagnosed DNS outage; never rerun agents')
+    parser.add_argument('--resume', action='store_true', help='Continue Gmail after a diagnosed interruption; preserve completed agent cases')
     args = parser.parse_args()
     if not 0 < args.budget <= 10:
         parser.error('Budget must be greater than zero and at most $10 per collection')
@@ -106,11 +106,7 @@ def main():
                 from evals.agent_overload.campaign_budget import initialize_prices, CampaignBudget
                 initialize_prices(output, (model, *JUDGES))
                 stack.enter_context(patch.object(provider, "request_budget", CampaignBudget(output, args.budget)))
-                import pytest
-                target = 'test_routing.py' if args.collection == 'routing' else 'test_inspection.py'
-                marker = 'full' if args.collection == 'routing' else 'inspection'
-                code = pytest.main([f'evals/agent_overload/{target}', '-m', f'live and {marker}',
-                                    '-q', '--tb=short', '--junitxml', str(output / 'tests.xml')])
+                code = routing_collection(args.collection, output)
             manifest.update(status='finished', exit_code=int(code))
             return int(code)
         except BaseException as exc:
@@ -118,6 +114,37 @@ def main():
             raise
         finally:
             manifest_path.write_text(json.dumps(manifest, indent=2))
+
+
+def routing_collection(collection, output):
+    """Call the exact existing test evaluator in the already-scoped module graph."""
+    from evals.agent_overload.harness import evaluate_live_case
+    from evals.agent_overload.cases import full_cases
+    from evals.agent_overload.stress_cases import stress_cases
+    from evals.agent_overload.inspection_cases import INSPECTION_CASES, INSPECTION_HISTORY
+    cases = full_cases() + stress_cases() if collection == 'routing' else INSPECTION_CASES
+    outcomes = []
+    for case in cases:
+        print(f'Running {case.name}', flush=True)
+        try:
+            evaluate_live_case(case, INSPECTION_HISTORY.get(case.name))
+            outcome = {'case': case.name, 'status': 'passed'}
+        except AssertionError as exc:
+            outcome = {'case': case.name, 'status': 'failed', 'details': str(exc)}
+        except Exception as exc:
+            outcome = {'case': case.name, 'status': 'unavailable', 'details': str(exc)}
+        outcomes.append(outcome)
+        (output / 'outcomes.json').write_text(json.dumps(outcomes, indent=2))
+        print(json.dumps(outcome), flush=True)
+        # A stopped ledger must not schedule more cases. Preserve remaining cases as not run.
+        ledger = output / 'spend.json'
+        if ledger.exists():
+            state = json.loads(ledger.read_text())
+            if state['stopped'] or any(r['status'] in {'reserved', 'unresolved'} for r in state['requests']):
+                break
+        if 'unavailable (budget)' in outcome.get('details', '') or outcome.get('details', '').startswith('Budget limit:'):
+            break
+    return int(len(outcomes) != len(cases) or any(r['status'] != 'passed' for r in outcomes))
 
 
 def campaign(collection, mode):
@@ -131,7 +158,7 @@ def campaign(collection, mode):
         outcomes.append(result)
         print(json.dumps(result), flush=True)
         # Budget failures are unavailable, never a reason to use a fresh ledger.
-        if result.get('reason') == 'budget' or 'Budget' in result.get('details', ''):
+        if result.get('reason') == 'budget' or 'unavailable (budget)' in result.get('details', ''):
             break
     return int(len(outcomes) != len(variants) or any(r['status'] not in {'passed', 'completed'} for r in outcomes))
 
