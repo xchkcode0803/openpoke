@@ -7,6 +7,7 @@ from pathlib import Path
 import statistics
 
 from .run import MODELS
+from evals.agent_gmail.usage import effective_cost
 
 COLLECTIONS = ("gmail", "routing")
 
@@ -62,7 +63,8 @@ def routing(directory, collection):
             status = 'pass'
         details.append({'case': key, 'outcome': status,
                         'failures': failed, 'external_outcome': external or None})
-    charges = [c.get('response', {}).get('usage', {}).get('cost') for c in model_calls]
+    usages = [c.get('response', {}).get('usage', {}) for c in model_calls]
+    charges = [effective_cost(u) for u in usages]
     judge_charges = [j.get('cost') for j in judge_usage]
     ledger = json.loads((directory / 'spend.json').read_text()) if (directory / 'spend.json').exists() else None
     summary = {
@@ -71,7 +73,10 @@ def routing(directory, collection):
         'routing_passed_turns': sum(m['score'] == 1 for t in turns for m in t['metrics'] if m['name'] == 'RoutingCorrectnessMetric'),
         'metric_counts': {name: dict(Counter(str(m['score']) for t in turns for m in t['metrics'] if m['name'] == name))
                           for name in {m['name'] for t in turns for m in t['metrics']}},
-        'agent_cost': known_total(charges), 'judge_cost': None if judge_unavailable else known_total(judge_charges),
+        'agent_cost': known_total(charges),
+        'agent_openrouter_charges': known_total([u.get('cost') for u in usages]),
+        'upstream_inference_estimate': known_total([(u.get('cost_details') or {}).get('upstream_inference_cost') if u.get('is_byok') else 0 for u in usages]),
+        'judge_cost': None if judge_unavailable else known_total(judge_charges),
         'model_calls': len(model_calls),
         'returned_models': dict(Counter(c.get('response', {}).get('model', 'unknown') for c in model_calls)),
         'input_tokens': known_total([c.get('response', {}).get('usage', {}).get('prompt_tokens') for c in model_calls]),
@@ -126,6 +131,8 @@ def gmail(directory):
     overhead = sum(effective_cost(c.get('usage', {})) or 0 for c in interrupted_calls)
     summary['interrupted_agent_cost'] = overhead
     summary['operational_agent_cost'] = summary['agent_cost'] + overhead if summary['agent_cost'] is not None else None
+    summary['agent_openrouter_charges'] = known_total([c.get('usage', {}).get('cost') for c in calls])
+    summary['upstream_inference_estimate'] = known_total([(c.get('usage', {}).get('cost_details') or {}).get('upstream_inference_cost') if c.get('usage', {}).get('is_byok') else 0 for c in calls])
     calls += interrupted_calls
     timings = [a for c in calls for a in c['attempts']]
     summary.update(expected_scenarios=40, judge_cost=summary['judge_known_cost'] if summary['judge_cost_complete'] else None,
@@ -193,7 +200,7 @@ def markdown(data):
     text = ['# Agent evaluation report', '',
         'Sonnet 4 is the baseline; Gemini Flash is the candidate. Gmail uses the completed 40-case Sonnet run; routing uses the published 95/99 Sonnet result in [agent roster search results](agent_roster_search_results.md). '
         'Cases, expected outcomes, production prompts, tool schemas, and graders are unchanged between candidates.', '',
-        '| Collection | Model | Pass / expected | Failed | Unavailable | Not run | Agent cost | Judge cost | Agent cost / success |',
+        '| Collection | Model | Pass / expected | Failed | Unavailable | Not run | Agent inference cost | Judge cost | Inference cost / success |',
         '|---|---|---:|---:|---:|---:|---:|---:|---:|']
     for collection in COLLECTIONS:
         for model in MODELS:
@@ -204,10 +211,16 @@ def markdown(data):
                 continue
             o = s['outcomes']
             text.append(f"| {collection} | {model} | {o.get('pass', 0)}/{s['expected_scenarios']} | {o.get('agent_failure', 0)} | {o.get('unavailable', 0)} | {s['not_run']} | {money(s['agent_cost'])} | {money(s['judge_cost'])} | {money(s['cost_per_success'])} |")
+    text += ['', 'Agent inference cost includes provider-reported BYOK upstream estimates. Gemini uses the configured BYOK credits; its OpenRouter agent charges are reported separately below. These estimates are not a new cash invoice.', '']
     if any(not data[m].get(c) or data[m][c].get('scenarios', 0) != EXPECTED[c] for m in MODELS for c in COLLECTIONS):
         text[2:2] = ['**Incomplete comparison.** Some collections have not finished. Production model defaults have not been switched.', '']
     for collection, pairs in data.get('paired', {}).items():
         text += ['', f"{collection}: {len(pairs['improvements'])} improvements, {len(pairs['regressions'])} regressions, {len(pairs['unavailable_pairs'])} unavailable pairs."]
+    if all('families' in data[m].get('gmail', {}) for m in MODELS):
+        text += ['', '## Gmail families', '', '| Family | Sonnet pass / total | Gemini pass / total | Gemini unavailable |', '|---|---:|---:|---:|']
+        for family, left in sorted(data['sonnet']['gmail']['families'].items()):
+            right = data['gemini']['gmail']['families'][family]
+            text.append(f"| {family} | {left['pass']}/{sum(left.values())} | {right['pass']}/{sum(right.values())} | {right['unavailable']} |")
     if data.get('audit_notes'):
         text += ['', '## Audit qualifications', '', 'Primary scores remain frozen. These notes distinguish confirmed behavior from questionable judgments and coverage assumptions.', '']
         for note in data['audit_notes']:
@@ -240,16 +253,19 @@ def markdown(data):
                 text.append(f'- {model}/{collection}: measurement {s["status"]}.')
                 continue
             text += [f'### {model}: {collection}', '', f'Artifacts: `{s["artifacts"]}`.', '',
+                     f"OpenRouter agent charges: {money(s.get('agent_openrouter_charges'))}; BYOK upstream estimate: {money(s.get('upstream_inference_estimate'))}.", '',
                      f'Returned models: `{s["returned_models"]}`. Timing totals: `{s["timing_totals"]}`.', '']
             if collection == 'gmail':
                 text += [f'Known agent charges: {money(s["known_agent_cost"])}; known judge charges: {money(s["judge_known_cost"])}. Incomplete/unknown totals are not treated as zero.', '', f'Unauthorized sends: {s["unauthorized_sends"]}; target/content failures: {s["wrong_targets_or_content"]}; extra-transmission checks failed: {s["extra_transmissions"]}; reporting checks failed: {s["reporting_failures"]}.', '']
+            if collection == 'gmail' and s.get('interrupted_agent_cost'):
+                text += [f"Operational agent charges including provider-interrupted work: {money(s['operational_agent_cost'])}; interruption overhead: {money(s['interrupted_agent_cost'])}.", '']
             for case in s['cases']:
                 if case['outcome'] != 'pass':
                     reasons = [f.get('name', f.get('reason', str(f))) for f in case['failures']]
                     reasons += sorted({f"semantic {a.get('category', 'check')}" for a in case.get('semantic_failures', [])})
                     text.append(f'- `{case["case"]}`: {case["outcome"]}; ' + ('; '.join(reasons) or 'see saved grading evidence'))
             text.append('')
-    return '\n'.join(text)
+    return '\n'.join(text).rstrip()
 
 
 def main():

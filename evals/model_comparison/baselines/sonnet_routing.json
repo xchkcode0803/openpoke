@@ -8,13 +8,13 @@
   "turns": 102,
   "routing_passed_turns": 99,
   "metric_counts": {
-    "RoutingCorrectnessMetric": {
-      "1.0": 99,
-      "0.0": 3
-    },
     "InstructionFidelityMetric": {
       "1.0": 99,
       "0.0": 1
+    },
+    "RoutingCorrectnessMetric": {
+      "1.0": 99,
+      "0.0": 3
     }
   },
   "agent_cost": 1.695717,
@@ -766,5 +766,7 @@
     "source_trace_sha256": "ff31ff6e32c8a3f58bb34376e646a36d071a60af99a26b6ab467b608f07930a9",
     "model": "anthropic/claude-sonnet-4",
     "case_fingerprint": "f466df1ae88422eb3a2357d0cc6d913918e56c87128a4725aa31062cacac68fd"
-  }
+  },
+  "agent_openrouter_charges": 1.695717,
+  "upstream_inference_estimate": 0
 }

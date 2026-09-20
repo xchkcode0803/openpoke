@@ -53,3 +53,14 @@ def test_report_uses_published_sonnet_routing_baseline(tmp_path):
     assert baseline['manifest']['historical'] is True
     assert len(baseline['initial_contracts']) == 99
     assert set(result['sonnet']) == {'routing'}
+
+
+def test_byok_estimate_is_not_reported_as_free_inference(tmp_path):
+    entry = turn('byok', cost=0)
+    usage = entry['result']['metadata']['model_calls'][0]['response']['usage']
+    usage.update(is_byok=True, cost_details={'upstream_inference_cost': .23})
+    write(tmp_path / 'turns.jsonl', [entry])
+    result = routing(tmp_path, 'routing')
+    assert result['agent_cost'] == .23
+    assert result['agent_openrouter_charges'] == 0
+    assert result['upstream_inference_estimate'] == .23

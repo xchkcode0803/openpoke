@@ -29,9 +29,10 @@ and 900-second turn transport allowances. Production iteration limits are unchan
 Judges stay Jev 1.13 with Sonnet 4 fallback.
 
 The default limit is $10 per collection, configurable downward with `--budget`.
-Routing uses persistent conservative reservations for agent and judge calls.
-Gmail uses its existing measured-charge cap, which can overshoot by in-flight
-requests; missing charges stop subsequent work. Do not start a new directory to
+Routing uses persistent conservative reservations and settles OpenRouter charges.
+BYOK upstream estimates consume the configured provider credits and are reported
+separately from that ledger. Gmail's measured-cost cap includes those estimates
+and can overshoot by in-flight requests; missing charges stop subsequent work. Do not start a new directory to
 bypass an exhausted cap. The routing launcher directly calls the existing evaluator
 so its artifact and budget settings remain scoped to the same module instances.
 
