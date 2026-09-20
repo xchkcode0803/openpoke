@@ -30,7 +30,7 @@ RUN_LIVE_EVALS=1 python -m evals.agent_gmail.run --suite full
 
 The CLI reads `.env`, or the main checkout's `.env` in a linked worktree, without printing credentials. Runs are sequential. Every scenario uses real application orchestration and a disposable local mailbox. The initial API key placeholder in offline checks is required by the older overload harness; it makes no live requests.
 
-Use `--case NAME` (repeatable), `--repetitions N` (default: one), `--interaction-model ID`, `--execution-model ID`, and `--search-model ID` for experiments. Defaults for all three application roles are `anthropic/claude-sonnet-4`, the baseline. Gemini was used to develop the harness and remains the candidate replacement. `--budget USD` stops new work when measured spend reaches the cap; already in-flight requests can overshoot it. Missing usage prevents further requests under a cap. Judges use the existing pinned Jev/Sonnet fallback independently of the candidate models.
+Use `--case NAME` (repeatable), `--repetitions N` (default: one), `--interaction-model ID`, `--execution-model ID`, and `--search-model ID` for experiments. The standalone Gmail eval keeps `anthropic/claude-sonnet-4` as its explicit baseline default. The application now defaults to Gemini Flash for all five roles. Use the [comparison launcher](../model_comparison/README.md) to select either model with its reproducible pacing profile. `--budget USD` stops new work when measured spend reaches the cap; already in-flight requests can overshoot it. Missing usage prevents further requests under a cap. Judges use the existing pinned Jev/Sonnet fallback independently of the candidate models.
 
 ```bash
 RUN_LIVE_EVALS=1 python -m evals.agent_gmail.run --regrade .deepeval/gmail/RUN

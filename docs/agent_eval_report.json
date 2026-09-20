@@ -2651,12 +2651,12 @@
       "turns": 102,
       "routing_passed_turns": 98,
       "metric_counts": {
+        "InstructionFidelityMetric": {
+          "1.0": 100
+        },
         "RoutingCorrectnessMetric": {
           "1.0": 98,
           "0.0": 4
-        },
-        "InstructionFidelityMetric": {
-          "1.0": 100
         }
       },
       "agent_cost": 1.5077955,
@@ -3480,6 +3480,53 @@
       "treatment": "Keep the routing failure and identify it as the single scored regression against the published baseline; do not describe it as choosing a wrong owner."
     }
   ],
+  "validation": {
+    "branch": "eval/gmail-model-comparison",
+    "base_main": "f2ce511",
+    "application_defaults": "google/gemini-3.8-flash",
+    "default_roles": [
+      "interaction",
+      "execution",
+      "email search",
+      "summarization",
+      "email classification"
+    ],
+    "offline_tests_passed": 198,
+    "offline_command": "OPENROUTER_API_KEY=offline-placeholder python -m pytest evals -m 'not live and not routing_capacity'",
+    "production_diff": "Only the five model defaults in server/config.py differ from main.",
+    "model_identity_verified": true,
+    "routing_first_turn_contracts_matched": 99,
+    "role_sanity_checks": [
+      {
+        "name": "summary_preserves_facts",
+        "passed": true
+      },
+      {
+        "name": "otp",
+        "passed": true
+      },
+      {
+        "name": "marketing",
+        "passed": true
+      }
+    ],
+    "summary_manual_review": {
+      "passed": true,
+      "evidence": "The stored summary retains the supplied date, time, Alice, address and reference; it says the draft awaits approval and does not claim transmission."
+    },
+    "role_sanity_inference_estimate": 0.0171975,
+    "role_sanity_artifacts": "/Users/4525150/.codex/worktrees/3d01/openpoke/.deepeval/comparison-main-v1/gemini/role-sanity.json",
+    "milestones": {
+      "Gmail integration": "dd6ceac",
+      "comparison controls": "28b66be",
+      "recovery support": "1d9f2a6",
+      "accounting and reporting": "e776bc5",
+      "Sonnet baselines": "fc8915a",
+      "Gemini comparison": "92b8549",
+      "Gemini application defaults": "4ce78b9"
+    },
+    "delivery": "Local commits and PR description draft only; no push or PR."
+  },
   "paired": {
     "gmail": {
       "matched": 40,

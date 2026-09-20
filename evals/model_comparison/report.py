@@ -169,6 +169,8 @@ def collect(root):
             result[model][collection] = summary
     audit = root / 'audit_notes.json'
     result['audit_notes'] = json.loads(audit.read_text()) if audit.exists() else []
+    validation = root / 'validation.json'
+    result['validation'] = json.loads(validation.read_text()) if validation.exists() else None
     result['paired'] = {}
     for collection in COLLECTIONS:
         left, right = result['sonnet'].get(collection), result['gemini'].get(collection)
@@ -265,6 +267,18 @@ def markdown(data):
                     reasons += sorted({f"semantic {a.get('category', 'check')}" for a in case.get('semantic_failures', [])})
                     text.append(f'- `{case["case"]}`: {case["outcome"]}; ' + ('; '.join(reasons) or 'see saved grading evidence'))
             text.append('')
+    validation = data.get('validation')
+    if validation:
+        text += ['## Validation and handoff', '',
+            f"Application defaults: `{validation['application_defaults']}` for all five roles. {validation['production_diff']}", '',
+            f"**{validation['offline_tests_passed']} offline tests passed.** Command: `{validation['offline_command']}`.", '',
+            'The three focused summarization/classification checks passed; the summary also passed manual approval-state review. These are limited sanity checks, not broad quality benchmarks.', '',
+            f"Role-check inference estimate: {money(validation['role_sanity_inference_estimate'])}. Artifacts: `{validation['role_sanity_artifacts']}`.", '',
+            f"All returned candidate model IDs were verified, and {validation['routing_first_turn_contracts_matched']} historical routing prompt/schema contracts matched.", '',
+            f"Branch: `{validation['branch']}`, based on `{validation['base_main']}`.", '',
+            '| Milestone | Commit |', '|---|---|']
+        text += [f'| {name} | `{sha}` |' for name, sha in validation['milestones'].items()]
+        text += ['', '[Setup and reproducible commands](../evals/model_comparison/README.md). [Local PR description draft](agent_eval_pr_draft.md). ' + validation['delivery'], '']
     return '\n'.join(text).rstrip()
 
 

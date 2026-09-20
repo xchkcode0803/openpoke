@@ -143,3 +143,29 @@ Returned models: `{'google/gemini-3.8-flash': 130}`. Timing totals: `{'request_s
 - `reuses_agent_created_earlier_in_conversation`: agent_failure; RoutingCorrectnessMetric
 - `selects_broad_agent_for_trip_wide_change`: agent_failure; RoutingCorrectnessMetric
 - `selects_current_tax_filing_agent`: agent_failure; RoutingCorrectnessMetric
+
+## Validation and handoff
+
+Application defaults: `google/gemini-3.8-flash` for all five roles. Only the five model defaults in server/config.py differ from main.
+
+**198 offline tests passed.** Command: `OPENROUTER_API_KEY=offline-placeholder python -m pytest evals -m 'not live and not routing_capacity'`.
+
+The three focused summarization/classification checks passed; the summary also passed manual approval-state review. These are limited sanity checks, not broad quality benchmarks.
+
+Role-check inference estimate: $0.017198. Artifacts: `/Users/4525150/.codex/worktrees/3d01/openpoke/.deepeval/comparison-main-v1/gemini/role-sanity.json`.
+
+All returned candidate model IDs were verified, and 99 historical routing prompt/schema contracts matched.
+
+Branch: `eval/gmail-model-comparison`, based on `f2ce511`.
+
+| Milestone | Commit |
+|---|---|
+| Gmail integration | `dd6ceac` |
+| comparison controls | `28b66be` |
+| recovery support | `1d9f2a6` |
+| accounting and reporting | `e776bc5` |
+| Sonnet baselines | `fc8915a` |
+| Gemini comparison | `92b8549` |
+| Gemini application defaults | `4ce78b9` |
+
+[Setup and reproducible commands](../evals/model_comparison/README.md). [Local PR description draft](agent_eval_pr_draft.md). Local commits and PR description draft only; no push or PR.
