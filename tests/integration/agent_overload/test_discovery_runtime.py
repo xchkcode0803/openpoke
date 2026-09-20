@@ -73,8 +73,8 @@ def test_existing_delegation_behavior(runtime_env):
     env = runtime_env
     env.roster.add_agent("Hotels")
     result = env.run([call("send_message_to_user", message="On it"),
-                    call("send_message_to_agent", agent_name="Hotels", instructions="More hotels"),
-                    call("send_message_to_agent", agent_name="Flights", instructions="Find flights")], "Done")
+                    call("send_message_to_agent", action="reuse", agent_name="Hotels", instructions="More hotels"),
+                    call("send_message_to_agent", action="create", agent_name="Flights", instructions="Find flights")], "Done")
     assert result.success and result.execution_agents_used == 2
     assert set(env.roster.get_agents()) == {"Hotels", "Flights"}
     assert len(env.workers.calls) == 2
@@ -114,7 +114,7 @@ def test_search_inspect_delegate(runtime_env, inspect):
     steps = [[call('search_agents', query='hotel')]]
     if inspect:
         steps.append([call('inspect_agent', agent_name='Hotels')])
-    steps += [[call('send_message_to_agent', agent_name='Hotels', instructions='Change booking')], 'Done']
+    steps += [[call('send_message_to_agent', action='reuse', agent_name='Hotels', instructions='Change booking')], 'Done']
     result = env.run(*steps)
     assert result.success and env.workers.calls == [('Hotels', 'Change booking')]
     outputs = tool_outputs(env)
@@ -127,12 +127,12 @@ def test_reformulate_and_create(runtime_env):
     env = runtime_env
     env.roster.add_agent('Hotel Bookings')
     result = env.run([call('search_agents', query='lodging')], [call('search_agents', query='hotel')],
-                   [call('send_message_to_agent', agent_name='Hotel Bookings', instructions='Continue')], 'Done')
+                   [call('send_message_to_agent', action='reuse', agent_name='Hotel Bookings', instructions='Continue')], 'Done')
     assert result.success
     assert tool_outputs(env)[0]['result']['agents'] == []
     assert tool_outputs(env)[1]['result']['agents'] == ['Hotel Bookings']
     result = env.run([call('search_agents', query='dentist')],
-                   [call('send_message_to_agent', agent_name='Dentist', instructions='Book checkup')], 'Done')
+                   [call('send_message_to_agent', action='create', agent_name='Dentist', instructions='Book checkup')], 'Done')
     assert result.success and 'Dentist' in env.roster.get_agents()
     env.run([call('search_agents', query='dentist')], 'Done')
     assert tool_outputs(env)[0]['result']['agents'] == ['Dentist']
@@ -145,7 +145,7 @@ def test_search_next_page_and_empty_history(runtime_env):
     result = env.run([call('search_agents', query='hotel')],
                    [call('search_agents', query='hotel', offset=10)],
                    [call('inspect_agent', agent_name='Hotel 10')],
-                   [call('send_message_to_agent', agent_name='Hotel 10', instructions='Continue')], 'Done')
+                   [call('send_message_to_agent', action='reuse', agent_name='Hotel 10', instructions='Continue')], 'Done')
     assert result.success
     outputs = tool_outputs(env)
     assert outputs[0]['result']['next_offset'] == 10
@@ -160,7 +160,7 @@ def test_discovery_call_budget_and_parallel_calls(runtime_env, extra):
     calls = [call('search_agents', query='hotel'), call('inspect_agent', agent_name='Hotels')] * 3
     result = env.run(calls + [call('search_agents', query='hotel')] * extra,
                    [call('search_agents', query='hotel'),
-                    call('send_message_to_agent', agent_name='Hotels', instructions='Continue')], 'Done')
+                    call('send_message_to_agent', action='reuse', agent_name='Hotels', instructions='Continue')], 'Done')
     assert result.success and len(env.workers.calls) == 1
     outputs = tool_outputs(env)
     assert sum(o['status'] == 'success' for o in outputs if o['tool'] in env.runtime.DISCOVERY_TOOLS) == 6
@@ -202,8 +202,7 @@ def test_round_budget_and_resets(runtime_env):
 def test_prompt_contains_bounded_candidates(runtime_env, size):
     from server.agents.interaction_agent.agent import prepare_message_with_history
     env = runtime_env
-    env.roster._agents = [f'Hidden owner {i}' for i in range(size)]
-    env.roster.save()
+    env.roster.bulk_import([f'Hidden owner {i}' for i in range(size)])
     text = prepare_message_with_history('Continue', 'Known owner: Visible owner')[0]['content']
     assert f'total="{size}"' in text
     assert 'Visible owner' in text
@@ -222,8 +221,8 @@ def test_tool_handler_validation(runtime_env):
 def test_end_turn_batch_ends_after_all_delegations(runtime_env):
     env = runtime_env
     result = env.run([call('send_message_to_user', message='On it', end_turn=True),
-                    call('send_message_to_agent', agent_name='Hotel', instructions='Book a room'),
-                    call('send_message_to_agent', agent_name='Flight', instructions='Find tickets')])
+                    call('send_message_to_agent', action='create', agent_name='Hotel', instructions='Book a room'),
+                    call('send_message_to_agent', action='create', agent_name='Flight', instructions='Find tickets')])
     assert result.success and result.response == 'On it'
     assert len(env.requests) == 1 and len(env.workers.calls) == 2
 
@@ -256,13 +255,13 @@ def test_end_turn_flag_requires_boolean(runtime_env):
 def test_last_delegation_can_end_turn(runtime_env):
     env = runtime_env
     result = env.run([call('send_message_to_user', message='On it', end_turn=False),
-                    call('send_message_to_agent', agent_name='Hotel', instructions='Book a room', end_turn=True)])
+                    call('send_message_to_agent', action='create', agent_name='Hotel', instructions='Book a room', end_turn=True)])
     assert result.success and len(env.requests) == 1 and len(env.workers.calls) == 1
 
 
 def test_bad_delegation_end_flag_has_no_side_effects(runtime_env):
     env = runtime_env
-    result = env.run([call('send_message_to_agent', agent_name='Hotel', instructions='Book', end_turn='yes')], 'Done')
+    result = env.run([call('send_message_to_agent', action='create', agent_name='Hotel', instructions='Book', end_turn='yes')], 'Done')
     assert result.success and not env.roster.get_agents() and not env.workers.calls
 
 
@@ -281,7 +280,7 @@ def test_discovery_schemas_reflect_available_evidence(runtime_env):
 
 def test_ending_dispatch_still_requires_user_visible_response(runtime_env):
     env = runtime_env
-    result = env.run([call('send_message_to_agent', agent_name='Hotel', instructions='Book', end_turn=True)],
+    result = env.run([call('send_message_to_agent', action='create', agent_name='Hotel', instructions='Book', end_turn=True)],
                    [call('send_message_to_user', message='On it', end_turn=True)])
     assert result.success and result.response == 'On it' and len(env.requests) == 2
 
@@ -289,7 +288,7 @@ def test_ending_dispatch_still_requires_user_visible_response(runtime_env):
 def test_assistant_text_can_accompany_terminal_dispatch(runtime_env):
     env = runtime_env
     result = env.run({'content': 'On it', 'tool_calls': [
-        call('send_message_to_agent', agent_name='Hotel', instructions='Book', end_turn=True)]})
+        call('send_message_to_agent', action='create', agent_name='Hotel', instructions='Book', end_turn=True)]})
     assert result.success and result.response == 'On it' and len(env.requests) == 1
 
 

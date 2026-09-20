@@ -9,6 +9,7 @@ from ...logging_config import logger
 from ...services.conversation import get_conversation_log
 from ...services.execution import get_agent_roster, get_execution_agent_logs
 from ..execution_agent.batch_manager import ExecutionBatchManager
+from .delegation import resolve_delegation
 from .discovery import MAX_CANDIDATES, search_names, inspect_history
 
 
@@ -28,7 +29,7 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "search_agents",
-            "description": "Find additional existing owners by keywords. Returns up to 10 exact names ranked by relevance, total_matches and next_offset. Words need not all match; use next_offset with the same query for another page.",
+            "description": "Search existing names, assignments, and responses with keywords. Returns up to 10 exact names and evidence, has_more and next_offset. At most 100 ranked owners per query; narrow or reformulate after that window. Historical matches are clues, not proof of current ownership.",
             "parameters": {"type": "object", "properties": {
                 "query": {"type": "string"}, "offset": {"type": "integer", "minimum": 0}},
                 "required": ["query"], "additionalProperties": False},
@@ -48,18 +49,19 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "send_message_to_agent",
-            "description": "Deliver instructions to a specific execution agent. Creates a new agent if the name doesn't exist in the roster, or reuses an existing one.",
+            "description": "Deliver work to an exact existing owner with action=reuse, or intentionally start distinct new work with action=create. Unknown reuse names never create agents; existing create names are rejected.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "agent_name": {
                         "type": "string",
-                        "description": "Human-readable agent name describing its purpose (e.g., 'Vercel Job Offer', 'Email to Sharanjeet'). This name will be used to identify and potentially reuse the agent."
+                        "description": "For reuse, copy an exact existing name from context or discovery. For create, choose a descriptive new name for genuinely distinct work."
                     },
+                    "action": {"type": "string", "enum": ["reuse", "create"]},
                     "instructions": {"type": "string", "description": "This agent's task. Copy the relevant task clause from the user's request, preserving its quantities, qualifiers (such as more/additional), and prohibitions verbatim. Add context to resolve references, but exclude work assigned to other agents."},
                     "end_turn": {"type": "boolean", "description": "True when this batch dispatches all requested work. Ends this interaction turn after ALL calls in the batch run; workers continue asynchronously."},
                 },
-                "required": ["agent_name", "instructions", "end_turn"],
+                "required": ["agent_name", "instructions", "action", "end_turn"],
                 "additionalProperties": False,
             },
         },
@@ -137,29 +139,23 @@ _EXECUTION_BATCH_MANAGER = ExecutionBatchManager()
 
 def search_agents(query: str, offset: int = 0) -> ToolResult:
     roster = get_agent_roster()
-    roster.load()
-    return ToolResult(success=True, payload=search_names(roster.get_agents(), query, offset))
+    get_execution_agent_logs().sync_pending()
+    return ToolResult(success=True, payload=search_names(roster.catalog, query, offset))
 
 
 def inspect_agent(agent_name: str, offset: int = 0) -> ToolResult:
     roster = get_agent_roster()
-    roster.load()
     return ToolResult(success=True, payload=inspect_history(
-        roster.get_agents(), agent_name, get_execution_agent_logs(), offset))
+        roster.catalog, agent_name, get_execution_agent_logs(), offset))
 
 
 # Create or reuse execution agent and dispatch instructions asynchronously
-def send_message_to_agent(agent_name: str, instructions: str, end_turn: bool = False) -> ToolResult:
+def send_message_to_agent(agent_name: str, instructions: str, action: str, end_turn: bool = False) -> ToolResult:
     """Send instructions to an execution agent."""
     if type(end_turn) is not bool:
         raise ValueError("end_turn must be a boolean")
     roster = get_agent_roster()
-    roster.load()
-    existing_agents = set(roster.get_agents())
-    is_new = agent_name not in existing_agents
-
-    if is_new:
-        roster.add_agent(agent_name)
+    is_new = resolve_delegation(roster, agent_name, instructions, action)
 
     get_execution_agent_logs().record_request(agent_name, instructions)
 
@@ -258,11 +254,10 @@ def wait(reason: str) -> ToolResult:
 def get_tool_schemas():
     """Return OpenAI-compatible tool schemas."""
     roster = get_agent_roster()
-    roster.load()
-    names = roster.get_agents()
-    # A complete visible roster needs no search; absent histories add no evidence.
-    allow_search = len(names) > MAX_CANDIDATES
-    allow_inspect = len(names) > 1 and bool(get_execution_agent_logs().list_agents())
+    get_execution_agent_logs().sync_pending()
+    count = roster.count()
+    allow_search = count > MAX_CANDIDATES
+    allow_inspect = count > 1 and roster.catalog.has_history()
     return [schema for schema in TOOL_SCHEMAS
             if (schema["function"]["name"] != "search_agents" or allow_search)
             and (schema["function"]["name"] != "inspect_agent" or allow_inspect)]

@@ -23,6 +23,8 @@ from evals.agent_overload.stress_cases import stress_cases
 
 
 def _tool_call(identifier: str, name: str, arguments: dict) -> dict:
+    if name == "send_message_to_agent":
+        arguments = {"action": "reuse", **arguments}
     return {"id": identifier, "type": "function", "function": {"name": name, "arguments": json.dumps(arguments)}}
 
 

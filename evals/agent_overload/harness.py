@@ -183,9 +183,8 @@ def _reset_services(root: Path) -> tuple[Any, Any, Any, Any]:
 
 def _seed_case(case: RoutingCase, roster: Any, conversation: Any, working_memory: Any) -> None:
     roster.clear()
-    # Avoid 10,000 full-file rewrites while constructing an isolated fixture.
-    roster._agents = list(case.initial_agents)
-    roster.save()
+    # One transaction builds roster membership and its FTS index.
+    roster.bulk_import(case.initial_agents)
     conversation.clear()
     if case.initial_summary:
         state = working_memory.load_summary_state()
@@ -220,6 +219,7 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
     import server.agents.interaction_agent.runtime as runtime_module
     import server.agents.interaction_agent.tools as tools_module
 
+    setup_started = time.perf_counter()
     roster, conversation, working_memory, execution_logs = _reset_services(root)
     _seed_case(case, roster, conversation, working_memory)
     for name, entries in (history or {}).items():
@@ -232,6 +232,12 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
                 execution_logs.record_agent_response(name, text)
             else:
                 raise ValueError(f"Unsupported history tag: {tag}")
+    setup_seconds = time.perf_counter() - setup_started
+    if os.getenv('EVAL_PHASE_FILE'):
+        phase_path = Path(os.environ['EVAL_PHASE_FILE'])
+        phase_temporary = phase_path.with_suffix('.tmp')
+        phase_temporary.write_text(json.dumps({'phase': 'routing', 'started': time.monotonic()}))
+        phase_temporary.replace(phase_path)
     settings = SimpleNamespace(
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
         interaction_agent_model=MODEL,
@@ -259,7 +265,7 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
                 stack.enter_context(service_patch)
             runtime = _TracingInteractionRuntime(runtime_module.InteractionAgentRuntime)
             for index, turn in enumerate(case.turns):
-                roster_before = roster.get_agents()
+                roster_count = roster.count()
                 runtime.tool_calls = []
                 runtime.input_tokens = 0
                 runtime.output_tokens = 0
@@ -298,13 +304,15 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
                             created_agents[expected_item.task_key] = actual_name
                 metadata = {
                     "case_name": case.name,
+                    "index_setup_seconds": setup_seconds if index == 0 else 0,
+                    "index_bytes": roster.catalog.path.stat().st_size,
                     "turn_index": index,
                     "turn_source": turn.source,
                     "expected_action": turn.expected_action,
                     "expected_delegations": expected,
                     "response_requirements": list(turn.response_requirements),
-                    "roster_before": roster_before if not any(tag.startswith("routing_") for tag in case.tags) else None,
-                    "roster_count": len(roster_before),
+                    "roster_before": None,
+                    "roster_count": roster_count,
                     "actual_model": settings.interaction_agent_model,
                     "worker_dispatches": batch_manager.calls[:],
                     "runtime_success": result.success,
@@ -319,7 +327,7 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
                     "model_call_seconds_including_pacing": runtime.model_latency,
                     "conversation_context": case.initial_conversation,
                 }
-                if any(tag.startswith("routing_") for tag in case.tags) and runtime.model_calls:
+                if runtime.model_calls:
                     first_messages = runtime.model_calls[0]["messages"]
                     first_input = str(first_messages[0].get("content", ""))
                     match = re.search(r"<active_agents[^>]*>\s*(.*?)\s*</active_agents>", first_input, re.S)

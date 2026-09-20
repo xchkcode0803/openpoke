@@ -1,122 +1,150 @@
-"""Deterministic, bounded views of agent names and recorded work."""
-import math
+"""Bounded BM25 retrieval shared by prompt construction and discovery tools."""
 import re
-import unicodedata
-from collections import Counter
+from ...services.execution.catalog import normalize
 
 MAX_CANDIDATES = 20
-RECENT_HISTORY_CHAR_LIMIT = 6000
-CURRENT_MESSAGE_WEIGHT = 3
-NAME_LENGTH_PENALTY = 0.15
 SEARCH_PAGE_SIZE = 10
-INSPECTION_PAGE_SIZE = 6
-INSPECTION_EXCERPT_CHAR_LIMIT = 1000
-OWNERSHIP_EXCERPT_CHAR_LIMIT = 400
+SEARCH_POOL_SIZE = 100
+RECENT_HISTORY_CHAR_LIMIT = 6000
+QUERY_TERM_LIMIT = 64
 
 
-def normalize(value: str) -> str:
-    folded = unicodedata.normalize("NFKC", value).casefold()
-    return " ".join(re.sub(r"[\W_]+", " ", folded).split())
+def _query(text):
+    # Literal tokens only: model-supplied FTS operators cannot become syntax.
+    terms = list(dict.fromkeys(re.findall(r'\w+', normalize(text), re.UNICODE)))[:QUERY_TERM_LIMIT]
+    return ' OR '.join('"' + word.replace('"', '""') + '"' for word in terms)
 
 
-def _page(items: list, offset: int, size: int) -> dict:
-    if type(offset) is not int or not 0 <= offset <= len(items):
-        raise ValueError("offset must be an integer between zero and the result count")
-    end = min(offset + size, len(items))
-    return {"items": items[offset:end], "total_matches": len(items),
-            "next_offset": end if end < len(items) else None}
+def _mentions(db, text):
+    words = normalize(text).split()
+    maximum = db.execute('SELECT max(words) FROM agents').fetchone()[0] or 0
+    found = {}
+    # Text-driven exact lookups. No enumeration of the roster or name trie.
+    batch = {}
+    for end in range(len(words)):
+        for length in range(1, min(maximum, end + 1) + 1):
+            batch[' '.join(words[end-length+1:end+1])] = end
+            if len(batch) >= 400:
+                _lookup_mentions(db, batch, found)
+                batch.clear()
+    _lookup_mentions(db, batch, found)
+    return dict(sorted(found.items(), key=lambda item: (-item[1], item[0]))[:100])
 
 
-def _terms(normalized_text: str) -> set[str]:
-    # Singular/plural variants should not hide an otherwise relevant owner.
-    return {word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word
-            for word in normalized_text.split()}
+def _lookup_mentions(db, batch, found):
+    if batch:
+        placeholders = ','.join('?' for _ in batch)
+        for row in db.execute(f'SELECT id,normalized FROM agents WHERE normalized IN ({placeholders}) ORDER BY normalized,name LIMIT 100', tuple(batch)):
+            found[row['id']] = batch[row['normalized']]
+        if len(found) > 100:
+            retained = sorted(found.items(), key=lambda item: (-item[1], item[0]))[:100]
+            found.clear()
+            found.update(retained)
 
 
-def rank_names(names: list[str], query: str, history: str = "") -> list[str]:
-    """Rank name evidence, giving explicit conversation owners priority.
-
-    Only caller-supplied names and text are used. No task-specific dictionaries,
-    expected answers, or model calls are involved.
-    """
-    normalized_names = {name: normalize(name) for name in names}
-    name_terms = {name: _terms(normalized) for name, normalized in normalized_names.items()}
-    term_frequencies = Counter(term for terms in name_terms.values() for term in terms)
-    normalized_query = normalize(query)
-    current_terms = _terms(normalized_query)
-    recent_terms = _terms(normalize(history[-RECENT_HISTORY_CHAR_LIMIT:]))
-    history_for_mentions = " " + normalize(history) + " "
-    query_for_mentions = " " + normalized_query + " "
-
-    priorities = {}
-    for name, terms in name_terms.items():
-        keyword_score = sum(
-            math.log1p(len(names) / term_frequencies[term])
-            * (CURRENT_MESSAGE_WEIGHT * (term in current_terms) + (term in recent_terms))
-            for term in terms
-        )
-        # Prefer focused names over long names containing many incidental terms.
-        keyword_score /= 1 + NAME_LENGTH_PENALTY * len(terms)
-        normalized_name = normalized_names[name]
-        last_mention = history_for_mentions.rfind(" " + normalized_name + " ")
-        exact_match = normalized_name == normalized_query
-        mentioned_now = " " + normalized_name + " " in query_for_mentions
-        mentioned_before = last_mention >= 0
-
-        if exact_match or mentioned_now or mentioned_before or keyword_score:
-            priorities[name] = (
-                exact_match, mentioned_now, mentioned_before, keyword_score, last_mention,
-            )
-
-    # Stable sorting keeps alphabetical tie-breaking beneath the routing priorities.
-    ranked = sorted(
-        (name for name in names if name in priorities),
-        key=lambda name: (normalized_names[name], name),
-    )
-    ranked.sort(key=priorities.__getitem__, reverse=True)
-    return ranked
+def _hits(db, text, history):
+    query = _query(text)
+    if not query:
+        return []
+    if history:
+        return list(db.execute('''SELECT a.id,a.name,a.normalized,e.kind,e.timestamp,e.position,e.text,
+            snippet(history_search,0,'','',' … ',32) AS excerpt,history_search.rank AS score
+            FROM history_search JOIN entries e ON e.id=history_search.rowid JOIN agents a ON a.name=e.name
+            WHERE history_search MATCH ? ORDER BY history_search.rank,a.normalized,a.name,e.id LIMIT 100''', (query,)))
+    return list(db.execute('''SELECT a.id,a.name,a.normalized,profiles.rank AS score
+        FROM profiles JOIN agents a ON a.id=profiles.rowid
+        WHERE profiles MATCH ? AND profiles.rank MATCH 'bm25(3.0,1.0,2.0)'
+        ORDER BY profiles.rank,a.normalized,a.name LIMIT 100''', (query,)))
 
 
-def select_candidates(names: list[str], query: str, history: str, limit: int = MAX_CANDIDATES) -> list[str]:
-    if len(names) <= limit:
-        return list(names)
-    return rank_names(names, query, history)[:limit]
+def ranked_candidates(catalog, query, history=''):
+    scores, evidence, names = {}, {}, {}
+    with catalog.connect() as db:
+        db.execute('BEGIN')  # One read snapshot across all retrieval streams.
+        current_mentions = _mentions(db, query)
+        past_mentions = _mentions(db, history)
+        exact = {row[0] for row in db.execute('SELECT id FROM agents WHERE normalized=? ORDER BY name LIMIT 100', (normalize(query),))}
+        for text, weight in ((query, 3), (history[-RECENT_HISTORY_CHAR_LIMIT:], 1)):
+            for is_history in (False, True):
+                seen = set()
+                for row in _hits(db, text, is_history):
+                    identifier = row['id']
+                    if identifier in seen:
+                        continue
+                    seen.add(identifier)
+                    names[identifier] = (row['normalized'], row['name'])
+                    scores[identifier] = scores.get(identifier, 0) + weight / (60 + len(seen))
+                    if is_history and identifier not in evidence:
+                        evidence[identifier] = {'type': row['kind'], 'timestamp': row['timestamp'],
+                            'source': f"{row['name']}:{row['position']}", 'text': row['excerpt'][:400],
+                            'truncated': len(row['text']) > len(row['excerpt'][:400])}
+        for identifier in exact | current_mentions.keys() | past_mentions.keys():
+            row = db.execute('SELECT normalized,name FROM agents WHERE id=?', (identifier,)).fetchone()
+            names[identifier] = (row['normalized'], row['name'])
+            scores.setdefault(identifier, 0)
+        ranked = sorted(scores, key=lambda identifier: (
+            -int(identifier in exact), -int(identifier in current_mentions),
+            -int(identifier in past_mentions), -scores[identifier],
+            -past_mentions.get(identifier, -1), *names[identifier], identifier))[:SEARCH_POOL_SIZE]
+        return [_profile(db, identifier, evidence.get(identifier)) for identifier in ranked]
 
 
-def search_names(names: list[str], query: str, offset: int = 0) -> dict:
+def _profile(db, identifier, evidence=None):
+    row = db.execute('SELECT * FROM agents WHERE id=?', (identifier,)).fetchone()
+    result = {'name': row['name']}
+    if row['initial_assignment'] is not None:
+        result['initial_assignment'] = row['initial_assignment']
+        if row['latest_assignment'] != row['initial_assignment']:
+            result['latest_assignment'] = row['latest_assignment']
+        result['excerpts_truncated'] = bool(row['initial_truncated'] or row['latest_truncated'])
+    if evidence and evidence['text'] not in (row['initial_assignment'], row['latest_assignment']):
+        result['matching_history'] = evidence
+    return result
+
+
+def select_candidates(catalog, query, history='', limit=MAX_CANDIDATES):
+    ranked = ranked_candidates(catalog, query, history)
+    if catalog.count() <= limit:
+        matches = {item['name']: item for item in ranked}
+        with catalog.connect() as db:
+            db.execute('BEGIN')
+            return [matches.get(row['name']) or _profile(db, row['id'])
+                    for row in db.execute('SELECT id,name FROM agents ORDER BY id LIMIT ?', (limit,))]
+    return ranked[:limit]
+
+
+def _offset(offset, count):
+    if type(offset) is not int or not 0 <= offset <= count:
+        raise ValueError('offset must be an integer within the available result window')
+
+
+def search_names(catalog, query, offset=0):
     if not isinstance(query, str) or not normalize(query):
-        raise ValueError("query must contain at least one word or number")
-    page = _page(rank_names(names, query), offset, SEARCH_PAGE_SIZE)
-    page["agents"] = page.pop("items")
-    return page
+        raise ValueError('query must contain at least one word or number')
+    candidates = ranked_candidates(catalog, query)
+    _offset(offset, len(candidates))
+    end = offset + SEARCH_PAGE_SIZE
+    page = candidates[offset:end]
+    return {'agents': [item['name'] for item in page], 'candidates': page,
+            'has_more': end < len(candidates), 'next_offset': end if end < len(candidates) else None,
+            'result_window': SEARCH_POOL_SIZE}
 
 
-def inspect_history(names: list[str], agent_name: str, logs, offset: int = 0) -> dict:
-    if not isinstance(agent_name, str) or agent_name not in names:
-        raise ValueError("agent_name must exactly match an existing agent")
-    entries = [{"type": tag, "timestamp": timestamp, "text": text[:INSPECTION_EXCERPT_CHAR_LIMIT],
-                "truncated": len(text) > INSPECTION_EXCERPT_CHAR_LIMIT}
-               for tag, timestamp, text in logs.iter_entries(agent_name)
-               if tag in {"agent_request", "agent_response"}]
-    entries.reverse()
-    page = _page(entries, offset, INSPECTION_PAGE_SIZE)
-    page["entries"] = page.pop("items")
-    page["agent_name"] = agent_name
-    return page
+def inspect_history(catalog, agent_name, logs, offset=0):
+    if not isinstance(agent_name, str) or not catalog.contains(agent_name):
+        raise ValueError('agent_name must exactly match an existing agent')
+    logs.sync_agent(agent_name)
+    with catalog.connect() as db:
+        count = db.execute('SELECT count(*) FROM entries WHERE name=?', (agent_name,)).fetchone()[0]
+        _offset(offset, count)
+        rows = db.execute('SELECT kind,timestamp,substr(text,1,1000) AS excerpt,length(text) AS length,position FROM entries WHERE name=? ORDER BY position DESC LIMIT 6 OFFSET ?', (agent_name, offset))
+        entries = [{'type': r['kind'], 'timestamp': r['timestamp'], 'text': r['excerpt'],
+                    'truncated': r['length'] > 1000, 'source': f"{agent_name}:{r['position']}"} for r in rows]
+    return {'agent_name': agent_name, 'entries': entries, 'total_matches': count,
+            'next_offset': offset + 6 if offset + 6 < count else None}
 
 
-def ownership_profile(agent_name: str, logs) -> dict:
-    """Small verbatim ownership hints; inspection can retrieve further history."""
-    first = last = None
-    for tag, _timestamp, text in logs.iter_entries(agent_name):
-        if tag == "agent_request":
-            if first is None:
-                first = text
-            last = text
-    profile = {"name": agent_name}
-    if first is not None:
-        profile["initial_assignment"] = first[:OWNERSHIP_EXCERPT_CHAR_LIMIT]
-        if last != first:
-            profile["latest_assignment"] = last[:OWNERSHIP_EXCERPT_CHAR_LIMIT]
-        profile["excerpts_truncated"] = len(first) > OWNERSHIP_EXCERPT_CHAR_LIMIT or len(last) > OWNERSHIP_EXCERPT_CHAR_LIMIT
-    return profile
+def ownership_profile(agent_name, logs):
+    with logs.catalog.connect() as db:
+        row = db.execute('SELECT id FROM agents WHERE name=?', (agent_name,)).fetchone()
+        return _profile(db, row[0]) if row else {'name': agent_name}

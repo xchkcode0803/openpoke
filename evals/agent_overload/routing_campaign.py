@@ -5,6 +5,7 @@ import os
 import platform
 import re
 import subprocess
+import signal
 import sys
 import tempfile
 import time
@@ -30,31 +31,37 @@ def memory_bytes(pid):
     return int(result.stdout.strip() or 0) * 1024
 
 
-def supervise(command, destination, *, seconds=300, memory_limit=4 * 1024**3):
+def supervise(command, destination, *, seconds=300, memory_limit=4 * 1024**3, build_seconds=None, ready_file=None, new_session=True):
     started = time.monotonic()
     peak = 0
     reason = None
     destination.mkdir(parents=True, exist_ok=True)
     with (destination / 'process.log').open('w') as log:
-        process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=new_session)
         try:
             while process.poll() is None:
                 peak = max(peak, memory_bytes(process.pid))
                 if peak > memory_limit:
                     reason = 'memory_limit'
-                elif time.monotonic() - started > seconds:
-                    reason = 'wall_clock_limit'
+                else:
+                    phase_started = started
+                    limit = build_seconds or seconds
+                    if ready_file and ready_file.exists():
+                        phase_started = json.loads(ready_file.read_text())['started']
+                        limit = seconds
+                    if time.monotonic() - phase_started > limit:
+                        reason = 'wall_clock_limit' if limit == seconds else 'index_build_limit'
                 if reason:
-                    process.terminate()
+                    os.killpg(process.pid, signal.SIGTERM) if new_session else process.terminate()
                     try:
                         process.wait(timeout=5)
                     except subprocess.TimeoutExpired:
-                        process.kill()
+                        os.killpg(process.pid, signal.SIGKILL) if new_session else process.kill()
                     break
                 time.sleep(0.1)
         finally:
             if process.poll() is None:
-                process.kill()
+                os.killpg(process.pid, signal.SIGKILL) if new_session else process.kill()
             process.wait()
     measurement = {'returncode': process.returncode, 'resource_failure': reason,
                    'sampled_peak_rss_bytes': peak, 'wall_seconds': time.monotonic() - started}
@@ -141,7 +148,7 @@ def prepare(variant, directory):
     coverage = {item.task_key: bool(owners.intersection(item.acceptable_agent_names))
                 for item in case.turns[0].delegations if item.route == 'reuse'}
     started = time.perf_counter()
-    search = discovery.search_names(list(case.initial_agents), case.turns[0].message)
+    search = discovery.search_names(roster.catalog, case.turns[0].message)
     search_time = time.perf_counter() - started
     feasibility = []
     if variant.kind == 'challenge':
@@ -150,12 +157,12 @@ def prepare(variant, directory):
         known.update(name for name in case.initial_agents if name in transcript)
         for tool, arguments in challenges()[variant.index].discovery:
             if tool == 'search_agents':
-                value = discovery.search_names(case.initial_agents, **arguments)
+                value = discovery.search_names(roster.catalog, **arguments)
                 known.update(value['agents'])
             else:
                 if arguments['agent_name'] not in known:
                     raise ValueError('Fixture requires guessing an inaccessible owner name')
-                value = discovery.inspect_history(case.initial_agents, logs=logs, **arguments)
+                value = discovery.inspect_history(roster.catalog, logs=logs, **arguments)
                 # Handoff references can introduce an exact owner name.
                 historical_text = json.dumps(value)
                 for name in case.initial_agents:

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import re
+import fcntl
+import os
+from .catalog import Catalog
 import threading
 from html import escape, unescape
 from pathlib import Path
-from typing import Dict, Iterator, List, Tuple
+from typing import Dict, Iterator, List, Tuple, Optional
 
 from ...logging_config import logger
 from ...data_paths import resolve_data_dir
@@ -15,14 +18,6 @@ from ...utils.timezones import now_in_user_timezone
 
 _DATA_DIR = resolve_data_dir(Path(__file__).resolve().parent.parent.parent / "data")
 _EXECUTION_LOG_DIR = _DATA_DIR / "execution_agents"
-
-
-def _slugify(name: str) -> str:
-    """Convert agent name to filesystem-safe slug."""
-    slug = "".join(ch.lower() if ch.isalnum() else "-" for ch in name.strip()).strip("-")
-    while "--" in slug:
-        slug = slug.replace("--", "-")
-    return slug or "agent"
 
 
 def _encode_payload(payload: str) -> str:
@@ -48,6 +43,9 @@ class ExecutionAgentLogStore:
         self._locks: dict[str, threading.Lock] = {}
         self._global_lock = threading.Lock()
         self._ensure_directory()
+        self.catalog = Catalog(base_dir)
+        self.catalog.bootstrap_logs()
+        self.sync_pending()
 
     def _ensure_directory(self) -> None:
         try:
@@ -57,28 +55,92 @@ class ExecutionAgentLogStore:
 
     def _lock_for(self, agent_name: str) -> threading.Lock:
         """Get or create a lock for an agent."""
-        slug = _slugify(agent_name)
+        slug = agent_name
         with self._global_lock:
             if slug not in self._locks:
-                self._locks[slug] = threading.Lock()
+                self._locks[slug] = threading.RLock()
             return self._locks[slug]
 
     def _log_path(self, agent_name: str) -> Path:
-        """Get log file path for an agent."""
-        return self._base_dir / f"{_slugify(agent_name)}.log"
+        journal = self.catalog.register_journal(agent_name)
+        if journal['ambiguous']:
+            raise ValueError(f'Ambiguous legacy history for {agent_name}; reconcile the shared legacy file explicitly')
+        return self._base_dir / journal['path']
+
+    def _sync_handle(self, agent_name, handle):
+        stat = os.fstat(handle.fileno())
+        identity = f'{stat.st_dev}:{stat.st_ino}'
+        with self.catalog.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM journals WHERE name=?', (agent_name,)).fetchone()
+            offset = row['offset']
+            if row['identity'] == identity and stat.st_size == offset and not row['dirty']:
+                return
+            refresh = row['identity'] != identity or stat.st_size < offset
+            if refresh:
+                db.execute('DELETE FROM entries WHERE name=?', (agent_name,))
+                offset = 0
+            handle.seek(offset)
+            for line in handle:
+                position = offset
+                if not line.endswith(b'\n'):
+                    raise ValueError(f'Incomplete history record for {agent_name}; preserve and repair the journal before retrying')
+                offset += len(line)
+                entry = self._parse_line(line.decode('utf-8'))
+                if entry is None:
+                    raise ValueError(f'Malformed history record for {agent_name} at byte {position}')
+                tag, timestamp, text = entry
+                refresh = refresh or tag == 'agent_request'
+                if tag in {'agent_request', 'agent_response'}:
+                    db.execute('INSERT OR IGNORE INTO entries(name,position,kind,timestamp,text) VALUES(?,?,?,?,?)',
+                               (agent_name, position, tag, timestamp, text))
+            if refresh:
+                self.catalog.refresh_profile(db, agent_name)
+            db.execute('UPDATE journals SET offset=?,identity=?,dirty=0 WHERE name=?', (offset, identity, agent_name))
+
+    def sync_agent(self, agent_name):
+        with self._lock_for(agent_name):
+            path = self._log_path(agent_name)
+            if not path.exists():
+                with self.catalog.connect() as db:
+                    db.execute('DELETE FROM entries WHERE name=?', (agent_name,))
+                    db.execute('UPDATE journals SET offset=0,identity=NULL,dirty=0 WHERE name=?', (agent_name,))
+                    self.catalog.refresh_profile(db, agent_name)
+                return
+            with path.open('r+b') as handle:
+                fcntl.flock(handle, fcntl.LOCK_EX)
+                self._sync_handle(agent_name, handle)
+
+    def sync_pending(self):
+        with self.catalog.connect() as db:
+            names = [row[0] for row in db.execute('SELECT name FROM journals WHERE dirty=1')]
+        for name in names:
+            self.sync_agent(name)
+
+    def rebuild_index(self):
+        """Explicit repair after external edits; no per-request directory scan."""
+        with self.catalog.connect() as db:
+            db.execute('DELETE FROM entries')
+            db.execute('UPDATE journals SET offset=0,identity=NULL,dirty=1 WHERE ambiguous=0')
+            db.execute('UPDATE agents SET initial_assignment=NULL,latest_assignment=NULL,initial_truncated=0,latest_truncated=0')
+        self.sync_pending()
 
     def _append(self, agent_name: str, tag: str, payload: str) -> None:
-        """Append an entry with the given tag."""
         encoded = _encode_payload(str(payload))
-        timestamp = now_in_user_timezone("%Y-%m-%d %H:%M:%S")
-        entry = f"<{tag} timestamp=\"{timestamp}\">{encoded}</{tag}>\n"
-
+        timestamp = now_in_user_timezone('%Y-%m-%d %H:%M:%S')
+        entry = f'<{tag} timestamp="{timestamp}">{encoded}</{tag}>\n'.encode('utf-8')
         with self._lock_for(agent_name):
-            try:
-                with self._log_path(agent_name).open("a", encoding="utf-8") as handle:
-                    handle.write(entry)
-            except Exception as exc:
-                logger.error(f"Failed to append to log: {exc}")
+            with self._log_path(agent_name).open('a+b') as handle:
+                fcntl.flock(handle, fcntl.LOCK_EX)
+                # Recover any completed append whose index transaction was interrupted.
+                self._sync_handle(agent_name, handle)
+                with self.catalog.connect() as db:
+                    db.execute('UPDATE journals SET dirty=1 WHERE name=?', (agent_name,))
+                handle.seek(0, os.SEEK_END)
+                handle.write(entry)
+                handle.flush()
+                os.fsync(handle.fileno())
+                self._sync_handle(agent_name, handle)
 
     def _parse_line(self, line: str) -> Optional[Tuple[str, str, str]]:
         """Parse a single log line."""
@@ -160,26 +222,28 @@ class ExecutionAgentLogStore:
         return entries[-limit:] if entries else []
 
     def list_agents(self) -> list[str]:
-        """List all agents with logs."""
-        try:
-            return sorted(path.stem for path in self._base_dir.glob("*.log"))
-        except Exception as exc:
-            logger.error(f"Failed to list agents: {exc}")
-            return []
+        with self.catalog.connect() as db:
+            return [row[0] for row in db.execute('SELECT DISTINCT name FROM entries ORDER BY name')]
 
     def clear_all(self) -> None:
-        """Clear all execution agent logs."""
-        try:
-            for log_file in self._base_dir.glob("*.log"):
-                log_file.unlink()
-            logger.info("Cleared all execution agent logs")
-        except Exception as exc:
-            logger.error(f"Failed to clear execution logs: {exc}")
+        # This explicit destructive operation is intentionally not on the read path.
+        for log_file in self._base_dir.glob('*.log'):
+            log_file.unlink()
+        with self.catalog.connect() as db:
+            db.execute('DELETE FROM entries')
+            db.execute('DELETE FROM journals')
+            db.execute('UPDATE agents SET initial_assignment=NULL,latest_assignment=NULL,initial_truncated=0,latest_truncated=0')
 
 
-_execution_agent_logs = ExecutionAgentLogStore(_EXECUTION_LOG_DIR)
+_execution_agent_logs = None
 
 
-def get_execution_agent_logs() -> ExecutionAgentLogStore:
-    """Get the singleton log store instance."""
+def get_execution_agent_logs():
+    global _execution_agent_logs
+    directory = resolve_data_dir(Path(__file__).resolve().parent.parent.parent / 'data') / 'execution_agents'
+    if _execution_agent_logs is None or _execution_agent_logs._base_dir != directory:
+        _execution_agent_logs = ExecutionAgentLogStore(directory)
     return _execution_agent_logs
+
+
+__all__ = ['ExecutionAgentLogStore', 'get_execution_agent_logs']

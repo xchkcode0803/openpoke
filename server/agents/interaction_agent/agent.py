@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from ...services.execution import get_agent_roster, get_execution_agent_logs
-from .discovery import select_candidates, ownership_profile
+from .discovery import select_candidates
 
 _prompt_path = Path(__file__).parent / "system_prompt.md"
 SYSTEM_PROMPT = _prompt_path.read_text(encoding="utf-8").strip()
@@ -44,14 +44,14 @@ def _render_conversation_history(transcript: str) -> str:
 
 def _render_candidates(latest_text: str, transcript: str) -> str:
     roster = get_agent_roster()
-    roster.load()
-    names = roster.get_agents()
-    candidates = select_candidates(names, latest_text, transcript)
-    complete = "true" if len(candidates) == len(names) else "false"
     logs = get_execution_agent_logs()
-    encoded = json.dumps([ownership_profile(name, logs) for name in candidates], ensure_ascii=False)
+    logs.sync_pending()
+    candidates = select_candidates(roster.catalog, latest_text, transcript)
+    count = roster.count()
+    complete = "true" if len(candidates) == count else "false"
+    encoded = json.dumps(candidates, ensure_ascii=False)
     encoded = encoded.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    return (f'<active_agents total="{len(names)}" complete="{complete}">\n'
+    return (f'<active_agents total="{count}" complete="{complete}">\n'
             f'{encoded}\n</active_agents>')
 
 

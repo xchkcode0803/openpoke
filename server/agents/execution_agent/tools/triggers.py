@@ -90,7 +90,6 @@ _SCHEMAS: List[Dict[str, Any]] = [
     },
 ]
 
-_LOG_STORE = get_execution_agent_logs()
 _TRIGGER_SERVICE = get_trigger_service()
 
 
@@ -143,13 +142,13 @@ def _create_trigger_tool(
             status=status,
         )
     except Exception as exc:  # pragma: no cover - defensive
-        _LOG_STORE.record_action(
+        get_execution_agent_logs().record_action(
             agent_name,
             description=f"createTrigger failed | details={json.dumps(summary_args, ensure_ascii=False)} | error={exc}",
         )
         return {"error": str(exc)}
 
-    _LOG_STORE.record_action(
+    get_execution_agent_logs().record_action(
         agent_name,
         description=f"createTrigger succeeded | trigger_id={record.id}",
     )
@@ -190,7 +189,7 @@ def _update_trigger_tool(
             status=status,
         )
     except Exception as exc:  # pragma: no cover - defensive
-        _LOG_STORE.record_action(
+        get_execution_agent_logs().record_action(
             agent_name,
             description=f"updateTrigger failed | id={trigger_id_int} | error={exc}",
         )
@@ -199,7 +198,7 @@ def _update_trigger_tool(
     if record is None:
         return {"error": f"Trigger {trigger_id_int} not found"}
 
-    _LOG_STORE.record_action(
+    get_execution_agent_logs().record_action(
         agent_name,
         description=f"updateTrigger succeeded | trigger_id={trigger_id_int}",
     )
@@ -219,13 +218,13 @@ def _list_triggers_tool(*, agent_name: str) -> Dict[str, Any]:
     try:
         records = _TRIGGER_SERVICE.list_triggers(agent_name=agent_name)
     except Exception as exc:  # pragma: no cover - defensive
-        _LOG_STORE.record_action(
+        get_execution_agent_logs().record_action(
             agent_name,
             description=f"listTriggers failed | error={exc}",
         )
         return {"error": str(exc)}
 
-    _LOG_STORE.record_action(
+    get_execution_agent_logs().record_action(
         agent_name,
         description=f"listTriggers succeeded | count={len(records)}",
     )

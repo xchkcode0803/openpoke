@@ -311,7 +311,6 @@ _SCHEMAS: List[Dict[str, Any]] = [
     },
 ]
 
-_LOG_STORE = get_execution_agent_logs()
 
 
 # Return Gmail tool schemas
@@ -330,13 +329,13 @@ def _execute(tool_name: str, composio_user_id: str, arguments: Dict[str, Any]) -
     try:
         result = execute_gmail_tool(tool_name, composio_user_id, arguments=payload)
     except Exception as exc:
-        _LOG_STORE.record_action(
+        get_execution_agent_logs().record_action(
             _GMAIL_AGENT_NAME,
             description=f"{tool_name} failed | args={payload_str} | error={exc}",
         )
         raise
 
-    _LOG_STORE.record_action(
+    get_execution_agent_logs().record_action(
         _GMAIL_AGENT_NAME,
         description=f"{tool_name} succeeded | args={payload_str}",
     )
