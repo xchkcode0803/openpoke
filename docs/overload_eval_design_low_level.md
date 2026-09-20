@@ -27,7 +27,7 @@ Disable summarization scheduling and replace execution dispatch with a recording
 
 A scenario has a DeepEval trace with model/tool spans. Saved per-turn records include system prompt, messages, responses, tool calls, token usage, reported cost, and runtime. Every turn is evaluated even if another turn fails.
 
-Discovery tools use the same isolated stores. Traces retain each request's available tool schemas, search results, inspection excerpts, discovery counts, and budget closure reason. Failed model requests are retained even when usage is unavailable. An overall agent iteration-limit failure is graded as a behavioral failure, not an unavailable provider result. See [agent roster search](agent_roster_search.md) for the runtime and testing design.
+Candidate ownership hints and discovery tools use the same isolated stores. Traces retain each request's available tool schemas, search results, inspection excerpts, discovery counts, and budget closure reason. Explicit batch completion may end the turn without another model call; all executed tool calls remain in the trace. Failed model requests are retained even when usage is unavailable. An overall agent iteration-limit failure is graded as a behavioral failure, not an unavailable provider result. See [agent roster search](agent_roster_search.md) for the runtime and testing design.
 
 ## Grading and providers
 

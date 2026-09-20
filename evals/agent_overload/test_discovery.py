@@ -13,7 +13,8 @@ def test_search_normalization_and_ranking():
     assert search_names(list(reversed(names)), 'MONTRÉAL hotel')['agents'] == expected
     assert search_names(names, 'hotel montr')['agents'] == expected
     assert search_names(names, 'strasse 04')['agents'] == ['STRASSE 2026_04', 'Straße 2026-04']
-    assert search_names(names, 'hotel flights')['agents'] == []
+    assert search_names(names, 'hotel flights')['agents'][0] == 'Flights'
+    assert set(search_names(names, 'hotel flights')['agents']) == set(expected) | {'Flights'}
 
 
 @pytest.mark.parametrize('size', [0, 1, 10, 11, 37])
@@ -36,7 +37,7 @@ def test_large_roster_search_is_bounded():
     names = [f'Hotel {i:05d}' for i in range(10000)]
     assert search_names(names, 'hotel')['total_matches'] == 10000
     assert len(search_names(names, 'hotel')['agents']) == 10
-    assert search_names(names, 'hotel 09999')['agents'] == ['Hotel 09999']
+    assert search_names(names, 'hotel 09999')['agents'][0] == 'Hotel 09999'
 
 
 @pytest.mark.parametrize('query', ['', '  ', '---___', None, 3, [], True])
@@ -107,3 +108,56 @@ def test_historical_instructions_are_only_data(tmp_path):
     logs.record_agent_response('Hotels', message)
     assert inspect_history(['Hotels'], 'Hotels', logs)['entries'][0]['text'] == message
     assert len(list(tmp_path.iterdir())) == 1
+
+
+def test_candidates_keep_all_small_rosters_and_bound_large_rosters():
+    from server.agents.interaction_agent.discovery import select_candidates
+    names = ['Tokyo Hotels', 'Tokyo Flights', 'Garden Maintenance']
+    assert select_candidates(names, 'cheap flights', '') == names
+    large = names + [f'Library Renewal {i}' for i in range(100)]
+    result = select_candidates(large, 'cheap flights', 'Tokyo Hotels found the room.')
+    assert 'Tokyo Hotels' in result and 'Tokyo Flights' in result
+    assert len(result) <= 20
+    assert select_candidates(large, 'unknownxyz', '') == []
+
+
+def test_search_relaxes_excessive_terms_and_matches_plurals():
+    assert search_names(['Dinner RSVP', 'Dentist'], 'dinner reservation confirmation')['agents'] == ['Dinner RSVP']
+    assert search_names(['Tokyo Flight Search'], 'Tokyo flights')['agents'] == ['Tokyo Flight Search']
+
+
+def test_current_explicit_owner_survives_many_recent_topics():
+    from server.agents.interaction_agent.discovery import select_candidates
+    names = [f'Task {i}' for i in range(50)]
+    history = '\n'.join(names)
+    result = select_candidates(names, 'Return to Task 0 please', history)
+    assert result[0] == 'Task 0'
+
+
+def test_ownership_profile_preserves_initial_and_latest_assignment(tmp_path):
+    from server.agents.interaction_agent.discovery import ownership_profile
+    logs = ExecutionAgentLogStore(tmp_path)
+    assert ownership_profile('Agent', logs) == {'name': 'Agent'}
+    logs.record_agent_response('Agent', 'A response is not an assignment')
+    assert ownership_profile('Agent', logs) == {'name': 'Agent'}
+    logs.record_request('Agent', 'Find a hotel')
+    assert ownership_profile('Agent', logs) == {
+        'name': 'Agent', 'initial_assignment': 'Find a hotel', 'excerpts_truncated': False}
+    logs.record_request('Agent', 'Intermediate request')
+    logs.record_request('Agent', 'Now own flights only')
+    profile = ownership_profile('Agent', logs)
+    assert profile['initial_assignment'] == 'Find a hotel'
+    assert profile['latest_assignment'] == 'Now own flights only'
+    assert profile['excerpts_truncated'] is False
+
+
+@pytest.mark.parametrize('first,last', [('x' * 401, 'short'), ('short', 'y' * 401)])
+def test_ownership_profiles_flag_shortened_excerpts(tmp_path, first, last):
+    from server.agents.interaction_agent.discovery import ownership_profile
+    logs = ExecutionAgentLogStore(tmp_path)
+    logs.record_request('Agent', first)
+    logs.record_request('Agent', last)
+    profile = ownership_profile('Agent', logs)
+    assert profile['excerpts_truncated'] is True
+    assert profile['initial_assignment'] == first[:400]
+    assert profile['latest_assignment'] == last[:400]

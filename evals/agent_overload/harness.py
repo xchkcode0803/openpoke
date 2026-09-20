@@ -242,6 +242,7 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
 
     patches = (
         patch.object(agent_module, "get_agent_roster", return_value=roster),
+        patch.object(agent_module, "get_execution_agent_logs", return_value=execution_logs),
         patch.object(tools_module, "get_agent_roster", return_value=roster),
         patch.object(tools_module, "get_execution_agent_logs", return_value=execution_logs),
         patch.object(tools_module, "get_conversation_log", return_value=conversation),

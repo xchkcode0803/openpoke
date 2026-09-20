@@ -183,6 +183,9 @@ class InteractionAgentRuntime:
             if not parsed_tool_calls:
                 break
 
+            batch_complete = False
+            batch_succeeded = True
+            needs_discovery_result = any(call.name in self.DISCOVERY_TOOLS for call in parsed_tool_calls)
             for tool_call in parsed_tool_calls:
                 summary.tool_names.append(tool_call.name)
 
@@ -192,6 +195,8 @@ class InteractionAgentRuntime:
                         summary.execution_agents.add(agent_name)
 
                 result = self._execute_tool(tool_call)
+                batch_complete |= result.end_turn
+                batch_succeeded &= result.success
 
                 if result.user_message:
                     summary.user_messages.append(result.user_message)
@@ -202,6 +207,9 @@ class InteractionAgentRuntime:
                     "content": self._format_tool_result(tool_call, result),
                 }
                 messages.append(tool_message)
+            if (batch_complete and batch_succeeded and not needs_discovery_result
+                    and (summary.user_messages or summary.last_assistant_text)):
+                break
         else:
             raise RuntimeError("Reached tool iteration limit without final response")
 

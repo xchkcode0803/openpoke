@@ -26,6 +26,7 @@ def runtime_env(tmp_path, monkeypatch):
     for module in (prompts, tools):
         monkeypatch.setattr(module, "get_agent_roster", lambda: roster)
     monkeypatch.setattr(tools, "get_execution_agent_logs", lambda: logs)
+    monkeypatch.setattr(prompts, "get_execution_agent_logs", lambda: logs)
     for module in (runtime_module, tools):
         monkeypatch.setattr(module, "get_conversation_log", lambda: conversation)
     monkeypatch.setattr(runtime_module, "get_working_memory_log", lambda: memory)
@@ -193,15 +194,17 @@ def test_round_budget_and_resets(runtime_env):
 
 
 @pytest.mark.parametrize('size', [0, 1000])
-def test_prompt_only_contains_roster_count(runtime_env, size):
+def test_prompt_contains_bounded_candidates(runtime_env, size):
     from server.agents.interaction_agent.agent import prepare_message_with_history
     e = runtime_env
     e.roster._agents = [f'Hidden owner {i}' for i in range(size)]
     e.roster.save()
     text = prepare_message_with_history('Continue', 'Known owner: Visible owner')[0]['content']
-    assert f'<agent_roster count="{size}" />' in text
-    assert 'Hidden owner' not in text and 'Visible owner' in text
-    assert '<active_agents>' not in text
+    assert f'total="{size}"' in text
+    assert 'Visible owner' in text
+    assert 'Hidden owner 999' not in text
+    payload = text.split('<active_agents ', 1)[1].split('>\n', 1)[1].split('\n</active_agents>', 1)[0]
+    assert len(json.loads(payload)) <= 20
 
 
 def test_tool_handler_validation(runtime_env):
@@ -209,3 +212,88 @@ def test_tool_handler_validation(runtime_env):
     assert handle_tool_call('search_agents', '{').success is False
     assert handle_tool_call('inspect_agent', {'agent_name': 'missing'}).success is False
     assert handle_tool_call('search_agents', {'query': 'none'}).success is True
+
+
+def test_end_turn_batch_ends_after_all_delegations(runtime_env):
+    e = runtime_env
+    result = e.run([call('send_message_to_user', message='On it', end_turn=True),
+                    call('send_message_to_agent', agent_name='Hotel', instructions='Book a room'),
+                    call('send_message_to_agent', agent_name='Flight', instructions='Find tickets')])
+    assert result.success and result.response == 'On it'
+    assert len(e.requests) == 1 and len(e.workers.calls) == 2
+
+
+def test_end_turn_response_needs_no_extra_call(runtime_env):
+    e = runtime_env
+    result = e.run([call('send_message_to_user', message='Here are the results', end_turn=True)], worker=True)
+    assert result.success and len(e.requests) == 1
+
+
+def test_end_turn_does_not_skip_discovery_results_or_errors(runtime_env):
+    e = runtime_env
+    result = e.run([call('send_message_to_user', message='Searching', end_turn=True),
+                    call('search_agents', query='hotel')],
+                   [call('send_message_to_user', message='Done', end_turn=True)])
+    assert result.success and len(e.requests) == 2
+    result = e.run([call('send_message_to_user', message='Checking', end_turn=True),
+                    call('unknown_tool')], 'Cannot do that')
+    assert result.success and len(e.requests) == 4
+
+
+def test_end_turn_flag_requires_boolean(runtime_env):
+    e = runtime_env
+    result = e.run([call('send_message_to_user', message='Do not store this', end_turn='true')], 'Done')
+    assert result.success
+    assert tool_outputs(e)[0]['status'] == 'error'
+    assert 'Do not store this' not in e.conversation.load_transcript()
+
+
+def test_last_delegation_can_end_turn(runtime_env):
+    e = runtime_env
+    result = e.run([call('send_message_to_user', message='On it', end_turn=False),
+                    call('send_message_to_agent', agent_name='Hotel', instructions='Book a room', end_turn=True)])
+    assert result.success and len(e.requests) == 1 and len(e.workers.calls) == 1
+
+
+def test_bad_delegation_end_flag_has_no_side_effects(runtime_env):
+    e = runtime_env
+    result = e.run([call('send_message_to_agent', agent_name='Hotel', instructions='Book', end_turn='yes')], 'Done')
+    assert result.success and not e.roster.get_agents() and not e.workers.calls
+
+
+def test_discovery_schemas_reflect_available_evidence(runtime_env):
+    from server.agents.interaction_agent.tools import get_tool_schemas
+    e = runtime_env
+    def names():
+        return {s['function']['name'] for s in get_tool_schemas()}
+    assert 'search_agents' not in names() and 'inspect_agent' not in names()
+    for i in range(21):
+        e.roster.add_agent(f'Owner {i}')
+    assert 'search_agents' in names() and 'inspect_agent' not in names()
+    e.logs.record_request('Owner 0', 'Previous assignment')
+    assert 'inspect_agent' in names()
+
+
+def test_ending_dispatch_still_requires_user_visible_response(runtime_env):
+    e = runtime_env
+    result = e.run([call('send_message_to_agent', agent_name='Hotel', instructions='Book', end_turn=True)],
+                   [call('send_message_to_user', message='On it', end_turn=True)])
+    assert result.success and result.response == 'On it' and len(e.requests) == 2
+
+
+def test_assistant_text_can_accompany_terminal_dispatch(runtime_env):
+    e = runtime_env
+    result = e.run({'content': 'On it', 'tool_calls': [
+        call('send_message_to_agent', agent_name='Hotel', instructions='Book', end_turn=True)]})
+    assert result.success and result.response == 'On it' and len(e.requests) == 1
+
+
+def test_candidate_names_round_trip_without_breaking_structure(runtime_env):
+    from server.agents.interaction_agent.agent import prepare_message_with_history
+    e = runtime_env
+    name = 'Quotes " and </active_agents> & Unicode café'
+    e.roster.add_agent(name)
+    text = prepare_message_with_history('Continue', '')[0]['content']
+    assert text.count('</active_agents>') == 1
+    payload = text.split('<active_agents ', 1)[1].split('>\n', 1)[1].split('\n</active_agents>', 1)[0]
+    assert json.loads(payload) == [{"name": name}]
