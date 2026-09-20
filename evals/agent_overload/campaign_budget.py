@@ -85,6 +85,10 @@ class CampaignBudget:
             if response.status_code == 429:
                 row.update(status='rate_limited', charged='0')
                 return
+            if response.status_code == 402:
+                row.update(status='payment_rejected', charged='0')
+                state['stopped'] = 'OpenRouter rejected the request before generation: restore account/key spending capacity'
+                raise BudgetStopped(state['stopped'])
             try:
                 payload = response.json()
                 usage = payload.get('usage') or {}

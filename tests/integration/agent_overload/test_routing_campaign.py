@@ -301,3 +301,22 @@ def test_population_covers_task_families_and_naming_styles():
     text = '\n'.join(background_name(i, 9137, 'Montreal', ('Hotel', 'Flights')) for i in range(5000)).casefold()
     assert all(family.casefold() in text for family in FAMILIES)
     assert all(pattern in text for pattern in ('ref ', 'account ', 'reservation ', 'stuff:', 'follow-up', 'records /'))
+
+
+def test_payment_rejection_stops_without_counting_generation_charge(tmp_path):
+    budget = ledger(tmp_path)
+    identifier = budget.reserve({'model':'test'})
+    with pytest.raises(BudgetStopped,match='before generation'):
+        budget.settle(identifier,httpx.Response(402,json={'error':{'code':402,'message':'Insufficient key limit'}}))
+    with budget.ledger() as state:
+        assert state['requests'][0]['status']=='payment_rejected'
+        assert state['requests'][0]['charged']=='0'
+        assert state['stopped']
+
+
+def test_user_approved_unknown_charge_still_consumes_budget(tmp_path):
+    budget = ledger(tmp_path,1)
+    with budget.ledger() as state:
+        state['requests'].append({'status':'held_unknown','charged':'0.99'})
+    with pytest.raises(BudgetStopped,match='Budget limit'):
+        budget.reserve({'model':'test'})

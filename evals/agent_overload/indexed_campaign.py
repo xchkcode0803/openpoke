@@ -47,6 +47,22 @@ def root_dir():
     return Path(os.getenv('INDEXED_CAMPAIGN_DIR','.deepeval/campaigns/indexed-routing-v1')).resolve()
 
 
+class CampaignPaused(RuntimeError):
+    """No further cases should start until spending uncertainty is resolved."""
+
+
+def pause_reason(root):
+    path = root / 'spend.json'
+    if not path.exists():
+        return None
+    ledger = json.loads(path.read_text())
+    if ledger.get('stopped'):
+        return ledger['stopped']
+    if any(row['status'] == 'reserved' for row in ledger['requests']):
+        return 'An interrupted request has no recorded usage; campaign paused before further work'
+    return None
+
+
 def run_comparison(spec):
     if os.getenv('RUN_LIVE_EVALS') != '1':
         raise RuntimeError('Set RUN_LIVE_EVALS=1 for paid comparison')
@@ -57,6 +73,9 @@ def run_comparison(spec):
             raise ValueError(f'Frozen implementation or input changed: {filename}')
     outcome=destination/'outcome.json'
     if outcome.exists():return json.loads(outcome.read_text())
+    reason = pause_reason(root)
+    if reason:
+        raise CampaignPaused(reason)
     phase=destination/'phase.json'
     if phase.exists():phase.unlink()
     with tempfile.TemporaryDirectory(prefix='openpoke-indexed-comparison-') as directory:
@@ -64,6 +83,12 @@ def run_comparison(spec):
                         destination,build_seconds=900,ready_file=phase)
     if state['resource_failure'] or not outcome.exists():
         write_json(outcome,{'status':'resource_limit' if state['resource_failure'] else 'harness_error',**state})
+    reason = pause_reason(root)
+    if reason:
+        raise CampaignPaused(reason)
+    unavailable = destination / 'unavailable.jsonl'
+    if unavailable.exists() and any(json.loads(line).get('metadata', {}).get('failure_kind') == 'budget' for line in unavailable.read_text().splitlines()):
+        raise CampaignPaused('Spending guard stopped the campaign; completed artifacts are preserved')
     return json.loads(outcome.read_text())
 
 
@@ -73,7 +98,7 @@ def child(spec, directory=None):
     from .harness import evaluate_live_case
     root=root_dir();destination=root/'live'/spec.key;destination.mkdir(parents=True,exist_ok=True)
     with (nullcontext(directory) if directory else tempfile.TemporaryDirectory(prefix='openpoke-indexed-comparison-')) as directory:
-        with patch.dict(os.environ,{'OPENPOKE_DATA_DIR':directory,'EVAL_PHASE_FILE':str(destination/'phase.json')}):
+        with patch.dict(os.environ,{'OPENPOKE_DATA_DIR':directory,'EVAL_PHASE_FILE':str(destination/'phase.json')}), patch.object(tempfile, 'tempdir', directory):
             try:
                 started=time.perf_counter();case,history,manifest=spec.build()
                 manifest['generation_seconds']=time.perf_counter()-started
