@@ -158,7 +158,7 @@ def deterministic(case: Case, record: dict) -> dict:
 
 
 async def semantic(case: Case, record: dict, jev=None, fallback=None) -> dict:
-    from evals.agent_overload.metrics import OpenRouterJevJudge, OpenRouterFallbackJudge
+    from evals.shared.judges import OpenRouterJevJudge, OpenRouterFallbackJudge
     jev = jev or OpenRouterJevJudge()
     fallback = fallback or OpenRouterFallbackJudge()
     answers = []

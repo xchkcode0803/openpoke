@@ -1,93 +1,52 @@
-"""Simple agent roster management - just a list of agent names."""
-
+"""Exact-name roster backed by the local SQLite ownership catalog."""
 import json
-import fcntl
-import time
 from pathlib import Path
-
-from ...logging_config import logger
+from .catalog import Catalog
 from ...data_paths import resolve_data_dir
 
 
 class AgentRoster:
-    """Simple roster that stores agent names in a JSON file."""
-
     def __init__(self, roster_path: Path):
-        self._roster_path = roster_path
-        self._agents: list[str] = []
-        self.load()
+        self._roster_path = roster_path  # Legacy import/export location.
+        self.catalog = Catalog(roster_path.parent)
 
-    def load(self) -> None:
-        """Load agent names from roster.json."""
-        if self._roster_path.exists():
-            try:
-                with open(self._roster_path, 'r') as f:
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        self._agents = [str(name) for name in data]
-            except Exception as exc:
-                logger.warning(f"Failed to load roster.json: {exc}")
-                self._agents = []
-        else:
-            self._agents = []
-            self.save()
+    def load(self):
+        """Compatibility health check; membership is read directly from SQLite."""
+        self.catalog.count()
 
-    def save(self) -> None:
-        """Save agent names to roster.json with file locking."""
-        max_retries = 5
-        retry_delay = 0.1
+    def add_agent(self, agent_name):
+        return self.catalog.add(agent_name)
 
-        for attempt in range(max_retries):
-            try:
-                self._roster_path.parent.mkdir(parents=True, exist_ok=True)
+    def contains(self, agent_name):
+        return self.catalog.contains(agent_name)
 
-                # Open file and acquire exclusive lock
-                with open(self._roster_path, 'w') as f:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    try:
-                        json.dump(self._agents, f, indent=2)
-                        return
-                    finally:
-                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    def count(self):
+        return self.catalog.count()
 
-            except BlockingIOError:
-                # Lock is held by another process
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-                else:
-                    logger.warning("Failed to acquire lock on roster.json after retries")
-            except Exception as exc:
-                logger.warning(f"Failed to save roster.json: {exc}")
-                break
+    def get_agents(self):
+        """Explicit full export. Routing must use bounded catalog operations."""
+        return self.catalog.names()
 
-    def add_agent(self, agent_name: str) -> None:
-        """Add an agent to the roster if not already present."""
-        if agent_name not in self._agents:
-            self._agents.append(agent_name)
-            self.save()
+    def bulk_import(self, names):
+        self.catalog.replace(names)
 
-    def get_agents(self) -> list[str]:
-        """Get list of all agent names."""
-        return list(self._agents)
+    def export_json(self, destination):
+        Path(destination).write_text(json.dumps(self.get_agents(), ensure_ascii=False, indent=2))
 
-    def clear(self) -> None:
-        """Clear the agent roster."""
-        self._agents = []
-        try:
-            if self._roster_path.exists():
-                self._roster_path.unlink()
-            logger.info("Cleared agent roster")
-        except Exception as exc:
-            logger.warning(f"Failed to clear roster.json: {exc}")
+    def clear(self):
+        with self.catalog.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('DELETE FROM agents')
+            db.execute('DELETE FROM entries')
+            db.execute("UPDATE metadata SET value='0' WHERE key='count'")
 
 
-_DATA_DIR = resolve_data_dir(Path(__file__).resolve().parent.parent.parent / "data")
-_ROSTER_PATH = _DATA_DIR / "execution_agents" / "roster.json"
-
-_agent_roster = AgentRoster(_ROSTER_PATH)
+_agent_roster = None
 
 
-def get_agent_roster() -> AgentRoster:
-    """Get the singleton roster instance."""
+def get_agent_roster():
+    global _agent_roster
+    path = resolve_data_dir(Path(__file__).resolve().parent.parent.parent / 'data') / 'execution_agents' / 'roster.json'
+    if _agent_roster is None or _agent_roster._roster_path != path:
+        _agent_roster = AgentRoster(path)
     return _agent_roster

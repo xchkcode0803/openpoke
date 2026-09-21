@@ -12,6 +12,8 @@ from evals.agent_overload.metrics import RoutingCorrectnessMetric
 
 
 def _tool_call(identifier: str, name: str, arguments: dict) -> dict:
+    if name == "send_message_to_agent":
+        arguments = {"action": "reuse", **arguments}
     return {"id": identifier, "type": "function", "function": {
         "name": name, "arguments": json.dumps(arguments),
     }}
@@ -93,27 +95,30 @@ def test_failed_model_request_is_preserved(monkeypatch):
     assert result.token_cost is None
 
 
-def test_provider_timing_includes_retries_and_pacing(monkeypatch):
+def test_provider_timing_includes_only_request_and_retry_wait(monkeypatch):
     import httpx
-    from evals.agent_overload import provider
+    from evals.shared import http
     clock = [0.0]
     attempts = []
 
     async def sleep(seconds):
         clock[0] += seconds
 
-    async def post(*args, **kwargs):
-        clock[0] += 1.0
-        attempts.append(1)
-        return httpx.Response(429 if len(attempts) == 1 else 200, headers={'Retry-After': '7'})
+    class Client:
+        async def post(self, *args, **kwargs):
+            clock[0] += 1.0
+            attempts.append(1)
+            return httpx.Response(429 if len(attempts) == 1 else 200, headers={'Retry-After': '7'})
 
-    monkeypatch.setattr(provider.time, 'monotonic', lambda: clock[0])
-    monkeypatch.setattr(provider.asyncio, 'sleep', sleep)
-    monkeypatch.setattr(provider, '_post', post)
-    monkeypatch.setattr(provider, '_next_request', 2.0)
-    response = asyncio.run(provider.paced_post(None, 'https://openrouter.ai/api/v1/chat/completions'))
+    async def sleep(seconds):
+        assert seconds == 7
+        clock[0] += seconds
+
+    monkeypatch.setattr(http.time, 'perf_counter', lambda: clock[0])
+    monkeypatch.setattr(http.asyncio, 'sleep', sleep)
+    response = asyncio.run(http.post_with_retry(Client(), 'https://openrouter.ai/api/v1/chat/completions'))
     assert response.extensions['eval_timing'] == {
-        'request_seconds': 2.0, 'pacing_seconds': 2.0, 'retry_wait_seconds': 7.0, 'attempts': 2}
+        'request_seconds': 2.0, 'retry_wait_seconds': 7.0, 'attempts': 2}
 
 
 @pytest.mark.parametrize('failure', ['routing', 'judge', 'provider', 'agent_iteration_limit'])

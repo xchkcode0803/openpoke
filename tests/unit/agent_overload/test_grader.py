@@ -10,6 +10,16 @@ from deepeval.test_case import LLMTestCase, ToolCall
 from evals.agent_overload.metrics import InstructionFidelityMetric, JudgeAnswer, JudgeError, RoutingCorrectnessMetric
 
 
+def test_routing_metrics_reexports_shared_judges() -> None:
+    from evals.agent_overload import metrics
+    from evals.shared import judges
+
+    assert metrics.JudgeAnswer is judges.JudgeAnswer
+    assert metrics.JudgeError is judges.JudgeError
+    assert metrics.OpenRouterJevJudge is judges.OpenRouterJevJudge
+    assert metrics.OpenRouterFallbackJudge is judges.OpenRouterFallbackJudge
+
+
 def _routing_case(
     *,
     route: str = "reuse",
@@ -27,7 +37,7 @@ def _routing_case(
             ),
             ToolCall(
                 name="send_message_to_agent",
-                input_parameters={"agent_name": agent_name, "instructions": "Find more Montreal hotels."},
+                input_parameters={"action": "reuse", "agent_name": agent_name, "instructions": "Find more Montreal hotels."},
                 output={"success": True, "payload": {"new_agent_created": route == "create"}},
             )
         ],
@@ -77,7 +87,7 @@ def test_deterministic_grader_rejects_extra_delegation() -> None:
     test_case.tools_called.append(
         ToolCall(
             name="send_message_to_agent",
-            input_parameters={"agent_name": "Monthly Rent Reminder", "instructions": "Check rent."},
+            input_parameters={"action": "reuse", "agent_name": "Monthly Rent Reminder", "instructions": "Check rent."},
             output={"success": True, "payload": {"new_agent_created": False}},
         )
     )
@@ -92,8 +102,8 @@ def test_deterministic_grader_accepts_parallel_create_range() -> None:
         actual_output="I will research that.",
         tools_called=[
             ToolCall(name="send_message_to_user", input_parameters={"message": "I will research that."}),
-            ToolCall(name="send_message_to_agent", input_parameters={"agent_name": "Montreal Cost Research", "instructions": "Research costs and jobs."}, output={"success": True, "payload": {"new_agent_created": True}}),
-            ToolCall(name="send_message_to_agent", input_parameters={"agent_name": "Montreal Immigration Research", "instructions": "Research immigration and climate."}, output={"success": True, "payload": {"new_agent_created": True}}),
+            ToolCall(name="send_message_to_agent", input_parameters={"action": "create", "agent_name": "Montreal Cost Research", "instructions": "Research costs and jobs."}, output={"success": True, "payload": {"new_agent_created": True}}),
+            ToolCall(name="send_message_to_agent", input_parameters={"action": "create", "agent_name": "Montreal Immigration Research", "instructions": "Research immigration and climate."}, output={"success": True, "payload": {"new_agent_created": True}}),
         ],
         metadata={
             "runtime_success": True,
@@ -149,7 +159,7 @@ def _semantic_case(instruction: str) -> LLMTestCase:
         tools_called=[
             ToolCall(
                 name="send_message_to_agent",
-                input_parameters={"agent_name": "Email Landlord About Kitchen Leak", "instructions": instruction},
+                input_parameters={"action": "reuse", "agent_name": "Email Landlord About Kitchen Leak", "instructions": instruction},
                 output={"success": True, "payload": {"new_agent_created": False}},
             )
         ],

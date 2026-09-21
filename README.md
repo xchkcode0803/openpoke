@@ -80,8 +80,8 @@ The web app proxies API calls to the Python server using the values in `.env`, s
 
 ## Evaluation
 
-See the [evaluation documentation](docs/README.md) for benchmark design and model
-comparison results, and the [eval setup guide](evals/README.md) for test commands.
+See the [evaluation documentation](docs/README.md) for the current Gmail and
+routing suites, and the [eval setup guide](evals/README.md) for test commands.
 
 ## License
 MIT — see [LICENSE](LICENSE).

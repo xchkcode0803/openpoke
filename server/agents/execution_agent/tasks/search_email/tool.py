@@ -42,7 +42,6 @@ ERROR_ITERATION_LIMIT = "Email search orchestrator exceeded iteration limit"
 
 
 _COMPLETION_TOOL_SCHEMA = get_completion_schema()
-_LOG_STORE = get_execution_agent_logs()
 _EMAIL_CLEANER = EmailTextCleaner(max_url_length=40)
 
 
@@ -306,7 +305,7 @@ async def _perform_search(
         "metadata_headers": ["From", "To", "Subject", "Date"],  # Ensure we get key headers
     }
 
-    _LOG_STORE.record_action(
+    get_execution_agent_logs().record_action(
         TASK_TOOL_NAME,
         description=f"{TASK_TOOL_NAME} search | query={query} | max_results={max_results}",
     )
@@ -367,7 +366,7 @@ def _build_response(
     
     payload = TaskEmailSearchPayload(emails=selected_emails)
     
-    _LOG_STORE.record_action(
+    get_execution_agent_logs().record_action(
         TASK_TOOL_NAME,
         description=(
             f"{TASK_TOOL_NAME} completed | queries={len(unique_queries)} "

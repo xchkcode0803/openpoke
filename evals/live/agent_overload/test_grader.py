@@ -17,7 +17,7 @@ def _semantic_case(instruction: str) -> LLMTestCase:
         tools_called=[
             ToolCall(
                 name="send_message_to_agent",
-                input_parameters={"agent_name": "Email Landlord About Kitchen Leak", "instructions": instruction},
+                input_parameters={"action": "reuse", "agent_name": "Email Landlord About Kitchen Leak", "instructions": instruction},
                 output={"success": True, "payload": {"new_agent_created": False}},
             )
         ],
@@ -59,7 +59,8 @@ def test_live_semantic_grader(instruction: str, should_pass: bool) -> None:
     if not __import__("os").getenv("RUN_LIVE_EVALS"):
         pytest.skip("set RUN_LIVE_EVALS=1 to call live judges")
     metric = InstructionFidelityMetric()
-    assert asyncio.run(metric.a_measure(_semantic_case(instruction))) == (1.0 if should_pass else 0.0)
+    score = asyncio.run(metric.a_measure(_semantic_case(instruction)))
+    assert score == (1.0 if should_pass else 0.0), metric.score_breakdown
 
 
 @pytest.mark.live

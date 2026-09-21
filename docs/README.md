@@ -1,19 +1,15 @@
 # Evaluation documentation
 
-Start with the [model comparison report](evals/reports/agent_eval_report.md): it
-records the evidence for changing the application defaults from Sonnet 4 to Gemini
-Flash. The report includes the frozen scores, costs, known failures, and limits of
-the comparison.
+OpenPoke uses `google/gemini-3.8-flash` for production inference and live
+evaluation runs. Semantic grading uses `typesafe/jev-1.13`; for low-confidence decisions, the fallback is `google/gemini-3.8-flash`.
 
-Read the benchmark guides next:
+- [Gmail](evals/gmail.md) covers the disposable Emulate mailbox, its safety
+  checks, and the 28-scenario development run.
+- [Routing](evals/routing.md) covers delegation, roster discovery, the 29-case
+  standard live run, and opt-in capacity checks.
+- [Agent roster search](architecture/agent_roster_search.md) is the production
+  reference for SQLite/FTS retrieval and runtime discovery limits.
 
-- [Gmail](evals/gmail.md) explains the end-to-end Emulate fixture, grading, and
-  safe local commands.
-- [Routing](evals/routing.md) explains candidate selection and the 99-case routing
-  suite.
-- [Difficult routing](evals/difficult_routing.md) covers the separate large-roster
-  and ownership collections. Its results were not part of the Gemini comparison.
-
-The [production routing reference](architecture/agent_roster_search.md) describes
-the application behavior independently of the benchmarks. The [eval package
-README](../evals/README.md) maps the implementation and test layout.
+Live runs write a new local artifact directory containing request and tool traces,
+usage, costs, timing, and a manifest. Those run-specific results are intentionally
+ignored by Git. The [eval package README](../evals/README.md) maps the test layout.

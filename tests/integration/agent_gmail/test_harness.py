@@ -35,7 +35,7 @@ def test_real_delegation_worker_callback_and_approval():
             if len(messages) == 1:
                 instruction = "Send approved draft" if "Yes, send" in text else "Create draft only"
                 return response(tool("send_message_to_user", message="Working on it"),
-                                tool("send_message_to_agent", agent_name="Cedar mail", instructions=instruction))
+                                tool("send_message_to_agent", agent_name="Cedar mail", action="reuse" if "Send approved" in instruction else "create", instructions=instruction))
             return response(tool("wait", reason="Await worker")) if len(messages) == 4 else response()
         if len(messages) == 1:
             if "Send approved" in str(messages):
@@ -90,7 +90,7 @@ def test_actual_nested_search_loop_and_callback():
                 return response()
             if "new_agent_message" in str(messages):
                 return response(tool("send_message_to_user", message="Reference CEDAR-42"))
-            return response(tool("send_message_to_user", message="Searching"), tool("send_message_to_agent", agent_name="Cedar", instructions="Find reference"))
+            return response(tool("send_message_to_user", message="Searching"), tool("send_message_to_agent", agent_name="Cedar", action="create", instructions="Find reference"))
         if role == "execution":
             if len(messages) == 1:
                 return response(tool(TASK_TOOL_NAME, search_query="from:alice@example.com"))

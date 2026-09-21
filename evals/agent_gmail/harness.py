@@ -67,7 +67,7 @@ async def run_case(case: Case, config: EvalConfig, completion) -> dict:
 
 
 async def _run(case, config, completion, root, emulator, recorder, record):
-    from evals.agent_overload.harness import _reset_services
+    from evals.shared.state import create_stores
     from server.config import get_settings
     from server.agents.execution_agent.batch_manager import ExecutionBatchManager
     from server.services.triggers.service import TriggerService
@@ -83,7 +83,7 @@ async def _run(case, config, completion, root, emulator, recorder, record):
     tt = importlib.import_module("server.agents.execution_agent.tools.triggers")
     gc = importlib.import_module("server.services.gmail.client")
 
-    roster, conversation, memory, logs = _reset_services(root)
+    roster, conversation, memory, logs = create_stores(root)
     settings = get_settings().model_copy(update={
         "openrouter_api_key": "eval-key-from-provider",
         "interaction_agent_model": config.interaction_model,
@@ -160,7 +160,7 @@ async def _run(case, config, completion, root, emulator, recorder, record):
         patches.extend([patch.object(module, "execute_gmail_tool", adapter),
                         patch.object(module, "get_active_gmail_user_id", return_value=USER if case.connected else None)])
     for module in (gt, st, tt):
-        patches.append(patch.object(module, "_LOG_STORE", logs))
+        patches.append(patch.object(module, "get_execution_agent_logs", return_value=logs))
 
     with ExitStack() as stack:
         for item in patches:
