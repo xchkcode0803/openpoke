@@ -2,7 +2,6 @@
 import argparse
 import asyncio
 from contextlib import ExitStack
-from dataclasses import asdict
 import hashlib
 import json
 import os
@@ -12,15 +11,17 @@ import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
 
-MODELS = {'sonnet': 'anthropic/claude-sonnet-4', 'gemini': 'google/gemini-3.8-flash'}
-JUDGES = ('typesafe/jev-1.13', 'anthropic/claude-sonnet-4')
-COLLECTIONS = ('gmail', 'routing', 'inspection', 'scale', 'challenge')
+from evals.shared.models import MODELS, JUDGES
+from evals.shared.provenance import eval_source_hashes
+from .collections import COLLECTIONS
 
 
 def fingerprint():
-    paths = [*Path('server').rglob('*.py'), *Path('server').rglob('*.txt'),
-             *Path('evals/agent_overload').glob('*.py'), *Path('evals/agent_gmail').glob('*.py')]
-    return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
+    paths = [*Path("server").rglob("*.py"), *Path("server").rglob("*.txt")]
+    return {
+        **{str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(paths)},
+        **eval_source_hashes(),
+    }
 
 
 def main():

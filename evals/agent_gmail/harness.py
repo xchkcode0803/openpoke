@@ -12,9 +12,48 @@ from unittest.mock import patch
 
 from .adapter import GmailAdapter
 from .config import EvalConfig
-from .emulator import Emulator, USER
+from .emulator import Emulator
+from .mailbox import USER
 from .tracing import Recorder
 from .types import Case
+
+
+class ScenarioTasks:
+    """Track workers and callbacks spawned while the scenario owns the loop."""
+
+    def __init__(self, recorder):
+        self.recorder = recorder
+        self.tasks = set()
+        self.original_create_task = asyncio.get_running_loop().create_task
+
+    def create_task(self, coro, *args, **kwargs):
+        task = self.original_create_task(coro, *args, **kwargs)
+        self.tasks.add(task)
+        return task
+
+    def pending(self):
+        return [task for task in self.tasks
+                if not task.done() and task is not asyncio.current_task()]
+
+    async def drain(self):
+        while True:
+            pending = self.pending()
+            if not pending:
+                await asyncio.sleep(0)
+                pending = self.pending()
+                if not pending:
+                    break
+            await asyncio.gather(*pending, return_exceptions=True)
+        for task in self.tasks:
+            if task.done() and not task.cancelled() and task.exception():
+                self.recorder.emit("task_error", error=str(task.exception()))
+
+    async def cancel(self):
+        for task in self.tasks:
+            if not task.done():
+                task.cancel()
+        if self.tasks:
+            await asyncio.gather(*self.tasks, return_exceptions=True)
 
 
 async def run_case(case: Case, config: EvalConfig, completion) -> dict:
@@ -54,27 +93,8 @@ async def _run(case, config, completion, root, emulator, recorder, record):
     })
     manager = ExecutionBatchManager(timeout_seconds=config.worker_timeout)
     adapter = GmailAdapter(emulator, case.faults, recorder.emit)
-    owned_tasks = set()
+    tasks = ScenarioTasks(recorder)
     loop = asyncio.get_running_loop()
-    original_create_task = loop.create_task
-
-    def track_task(coro, *args, **kwargs):
-        task = original_create_task(coro, *args, **kwargs)
-        owned_tasks.add(task)
-        return task
-
-    async def drain():
-        while True:
-            pending = [t for t in owned_tasks if not t.done() and t is not asyncio.current_task()]
-            if not pending:
-                await asyncio.sleep(0)
-                pending = [t for t in owned_tasks if not t.done() and t is not asyncio.current_task()]
-                if not pending:
-                    break
-            await asyncio.gather(*pending, return_exceptions=True)
-        for task in owned_tasks:
-            if task.done() and not task.cancelled() and task.exception():
-                recorder.emit("task_error", error=str(task.exception()))
 
     def model_call(role):
         async def call(**kwargs):
@@ -130,7 +150,7 @@ async def _run(case, config, completion, root, emulator, recorder, record):
         patch.object(er.ExecutionAgentRuntime, "_execute_tool", execution_tool),
         patch.object(ir.InteractionAgentRuntime, "handle_agent_message", callback),
         patch.object(conversation, "record_reply", reply),
-        patch.object(loop, "create_task", track_task),
+        patch.object(loop, "create_task", tasks.create_task),
     ]
     for module in (ir, er, st):
         patches.append(patch.object(module, "get_settings", return_value=settings))
@@ -146,37 +166,38 @@ async def _run(case, config, completion, root, emulator, recorder, record):
         for item in patches:
             stack.enter_context(item)
         try:
-            for index, turn in enumerate(case.turns):
-                recorder.turn = index
-                before = emulator.snapshot()
-                current = {"index": index, "before": before}
-                record["turns"].append(current)
-                # Approval may only follow an actual visible preview, never harness-invented state.
-                previews = [e for e in recorder.events if e["kind"] == "interaction_tool" and e.get("name") == "send_draft"
-                            and e.get("result", {}).get("success")]
-                if turn.requires_preview and not previews:
-                    current.update(error="Missing prior preview", failure_kind="dependency", after=before)
-                    continue
-                with recorder.span("user_turn", message=turn.message):
-                    try:
-                        async with asyncio.timeout(config.turn_timeout):
-                            result = await ir.InteractionAgentRuntime().execute(turn.message)
-                            current["result"] = asdict(result)
-                            await drain()
-                    except TimeoutError:
-                        current.update(error="Turn deadline exceeded", failure_kind="agent_timeout")
-                    except Exception as exc:
-                        current.update(error=str(exc), failure_kind="harness")
-                current["after"] = emulator.snapshot()
-                current["conversation"] = conversation.load_transcript()
-                if current.get("error") and current.get("failure_kind") != "dependency":
-                    break
+            await _run_turns(case, config, ir, conversation, emulator, recorder, record, tasks)
         finally:
-            for task in owned_tasks:
-                if not task.done():
-                    task.cancel()
-            if owned_tasks:
-                await asyncio.gather(*owned_tasks, return_exceptions=True)
+            await tasks.cancel()
             await manager.shutdown()
     record["unsupported"] = adapter.unsupported
     record["final"] = emulator.snapshot()
+
+
+async def _run_turns(case, config, runtime, conversation, emulator, recorder, record, tasks):
+    """Advance scripted users only after scenario-owned callbacks finish."""
+    for index, turn in enumerate(case.turns):
+        recorder.turn = index
+        before = emulator.snapshot()
+        current = {"index": index, "before": before}
+        record["turns"].append(current)
+        # Approval may only follow an actual visible preview, never harness-invented state.
+        previews = [e for e in recorder.events if e["kind"] == "interaction_tool" and e.get("name") == "send_draft"
+                    and e.get("result", {}).get("success")]
+        if turn.requires_preview and not previews:
+            current.update(error="Missing prior preview", failure_kind="dependency", after=before)
+            continue
+        with recorder.span("user_turn", message=turn.message):
+            try:
+                async with asyncio.timeout(config.turn_timeout):
+                    result = await runtime.InteractionAgentRuntime().execute(turn.message)
+                    current["result"] = asdict(result)
+                    await tasks.drain()
+            except TimeoutError:
+                current.update(error="Turn deadline exceeded", failure_kind="agent_timeout")
+            except Exception as exc:
+                current.update(error=str(exc), failure_kind="harness")
+        current["after"] = emulator.snapshot()
+        current["conversation"] = conversation.load_transcript()
+        if current.get("error") and current.get("failure_kind") != "dependency":
+            break

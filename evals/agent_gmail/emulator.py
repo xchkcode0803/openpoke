@@ -16,9 +16,7 @@ import httpx
 
 from .types import Mail
 
-USER = "owner@example.com"
-TOKEN = "gmail-eval-local-only"
-DATE = "Tue, 15 Sep 2026 12:00:00 +0000"
+from .mailbox import USER, TOKEN, DATE
 
 
 def decode_message(message: dict) -> dict:

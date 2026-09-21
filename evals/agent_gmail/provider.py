@@ -3,7 +3,7 @@ import asyncio
 import os
 import time
 import httpx
-from .usage import effective_cost
+from evals.shared.usage import effective_cost
 
 
 class ProviderFailure(RuntimeError):

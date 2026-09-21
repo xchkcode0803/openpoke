@@ -1,7 +1,9 @@
 """Explicit eval-only settings; production defaults are never modified."""
 from dataclasses import dataclass
 
-DEFAULT_MODEL = "anthropic/claude-sonnet-4"
+from evals.shared.models import SONNET
+
+DEFAULT_MODEL = SONNET
 FIXTURE_VERSION = "3"
 GRADER_VERSION = "6"
 

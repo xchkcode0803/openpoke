@@ -15,6 +15,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from .config import EvalConfig, DEFAULT_MODEL, FIXTURE_VERSION, GRADER_VERSION
+from evals.shared.provenance import eval_source_hashes
 from .provider import Provider
 from .reporting import write_json, summarize, compare
 
@@ -86,7 +87,7 @@ async def run(args):
                 "emulator_hash": hash_file(Path(__file__).with_name("emulator.py")),
                 "emulate_launcher_hash": hash_file(Path(__file__).parent / "emulate" / "service.mjs"),
                 "dependency_lock_hash": hash_file(Path(__file__).parent / "emulate" / "package-lock.json"),
-                "eval_source_hashes": {p.name: hash_file(p) for p in Path(__file__).parent.glob("*.py")},
+                "eval_source_hashes": eval_source_hashes(),
                 "working_tree_dirty": bool(subprocess.check_output(["git", "status", "--porcelain", "--", "evals/agent_gmail"], text=True).strip()),
                 "status": "running"}
     write_json(output / "manifest.json", manifest)

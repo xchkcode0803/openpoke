@@ -10,12 +10,14 @@ from pathlib import Path
 from uuid import uuid4
 import json
 
-MODEL = os.getenv("EVAL_CANDIDATE_MODEL", "anthropic/claude-sonnet-4")
+from evals.shared.models import SONNET, GEMINI
+
+MODEL = os.getenv("EVAL_CANDIDATE_MODEL", SONNET)
 
 
 def request_interval():
     """Only the Gemini comparison removes fixed pacing; retries remain bounded."""
-    return 0.0 if MODEL == "google/gemini-3.8-flash" else 4.1
+    return 0.0 if MODEL == GEMINI else 4.1
 
 
 _gate = None

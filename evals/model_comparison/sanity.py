@@ -10,7 +10,7 @@ from pathlib import Path
 import tempfile
 from unittest.mock import patch
 
-from .run import MODELS
+from evals.shared.models import MODELS
 
 
 async def check(root, output):

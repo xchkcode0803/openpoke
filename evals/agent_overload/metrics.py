@@ -12,11 +12,12 @@ from typing import Any, Protocol
 import httpx
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase, ToolCall
+from evals.shared.models import SONNET, JEV
+
 from .provider import MODEL, paced_post, save_result
 
-
-JEV_MODEL = "typesafe/jev-1.13"
-FALLBACK_MODEL = "anthropic/claude-sonnet-4"
+JEV_MODEL = JEV
+FALLBACK_MODEL = SONNET
 JEV_YES_THRESHOLD = 0.90
 JEV_NO_THRESHOLD = 0.10
 

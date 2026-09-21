@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import statistics
 import math
-from .usage import effective_cost
+from evals.shared.usage import effective_cost
 
 
 def write_json(path, value):
