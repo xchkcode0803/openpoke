@@ -1,6 +1,6 @@
 # Agent evaluation report
 
-Sonnet 4 is the baseline; Gemini Flash is the candidate. Gmail uses the completed 40-case Sonnet run; routing uses the published 95/99 Sonnet result in [agent roster search results](agent_roster_search_results.md). Cases, expected outcomes, production prompts, tool schemas, and graders are unchanged between candidates.
+Sonnet 4 is the baseline; Gemini Flash is the candidate. Gmail uses the completed 40-case Sonnet run; routing uses the published 95/99 Sonnet result in [committed routing baseline](../../../evals/model_comparison/baselines/sonnet_routing.json). Cases, expected outcomes, production prompts, tool schemas, and graders are unchanged between candidates.
 
 | Collection | Model | Pass / expected | Failed | Unavailable | Not run | Agent inference cost | Judge cost | Inference cost / success |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -144,7 +144,21 @@ Returned models: `{'google/gemini-3.8-flash': 130}`. Timing totals: `{'request_s
 - `selects_broad_agent_for_trip_wide_change`: agent_failure; RoutingCorrectnessMetric
 - `selects_current_tax_filing_agent`: agent_failure; RoutingCorrectnessMetric
 
-## Validation and handoff
+## Baseline provenance
+
+The published Sonnet routing baseline was evaluated at `78bba2c`: 95/99 scenarios and 98/102 turns passed. Its trace-derived snapshot retains all 99 initial prompt/schema fingerprints. The earlier flat-roster baseline scored 93/99 and is not the baseline used for this model comparison.
+
+[Historical measurements](../../../evals/model_comparison/baselines/routing_history.json) retain prior experiment tables, calibration costs, source revisions, and artifact references. They are separate from the primary comparison above. Original manifests retain paths as recorded at their evaluated revisions.
+
+## Cleanup verification
+
+200 offline tests passed after reorganizing the eval layer. All 470 existing test cases remain represented; paid evaluations and capacity checks require explicit collection paths.
+
+Fixture and rubric contracts are unchanged. Replaying deterministic grading and semantic evidence preparation for 82 saved Gmail records produced identical results. Comparison measurements and production files are unchanged. No new model or judge calls were made.
+
+Current validation command: `OPENROUTER_API_KEY=offline-placeholder python -m pytest -q`.
+
+## Validation at measurement time
 
 Application defaults: `google/gemini-3.8-flash` for all five roles. Only the five model defaults in server/config.py differ from main.
 
@@ -168,4 +182,4 @@ Branch: `eval/gmail-model-comparison`, based on `f2ce511`.
 | Gemini comparison | `92b8549` |
 | Gemini application defaults | `4ce78b9` |
 
-[Setup and reproducible commands](../evals/model_comparison/README.md). [Local PR description draft](agent_eval_pr_draft.md). Local commits and PR description draft only; no push or PR.
+[Setup and reproducible commands](../../../evals/README.md). Local commits only; nothing pushed or submitted.

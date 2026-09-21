@@ -2651,12 +2651,12 @@
       "turns": 102,
       "routing_passed_turns": 98,
       "metric_counts": {
-        "InstructionFidelityMetric": {
-          "1.0": 100
-        },
         "RoutingCorrectnessMetric": {
           "1.0": 98,
           "0.0": 4
+        },
+        "InstructionFidelityMetric": {
+          "1.0": 100
         }
       },
       "agent_cost": 1.5077955,
@@ -3568,5 +3568,274 @@
       "unavailable_pairs": [],
       "unmatched": []
     }
+  },
+  "historical_evidence": {
+    "retention_policy": "Superseded design notes and development journals were removed from the documentation tree. Git retains their prose; this field retains the unique numeric evidence, source revisions, and artifact references needed to interpret the current comparison.",
+    "routing_published_baseline": {
+      "source_revision": "78bba2c",
+      "model": "anthropic/claude-sonnet-4",
+      "scenarios": 99,
+      "evaluated_turns": 102,
+      "scenario_passes": 95,
+      "all_metric_turn_passes": 98,
+      "routing_correctness_turn_passes": 99,
+      "instruction_fidelity_turn_passes": 99,
+      "instruction_fidelity_denominator": 100,
+      "input_tokens": 475239,
+      "output_tokens": 18000,
+      "interaction_cost": 1.695717,
+      "full_run_seconds": 943.0,
+      "interaction_model_calls": 112,
+      "interaction_call_distribution": {
+        "one_call_turns": 93,
+        "two_call_turns": 8,
+        "three_call_turns": 1
+      },
+      "summed_turn_seconds": 657.74,
+      "http_request_seconds": 283.66,
+      "pacing_seconds": 365.56,
+      "judge_cost": 0.019163616,
+      "judge_requests": 103,
+      "total_reported_cost": 1.714880616,
+      "artifacts": "/Users/4525150/Desktop/openpoke/.deepeval/runs/20260920T010003-97fa01fa/",
+      "baseline_snapshot": "evals/model_comparison/baselines/sonnet_routing.json",
+      "contract_check": "All 99 first-turn prompt and tool-schema contracts matched the Gemini candidate run."
+    },
+    "routing_pre_optimization_baseline": {
+      "model": "anthropic/claude-sonnet-4",
+      "scenarios": 99,
+      "evaluated_turns": 102,
+      "scenario_passes": 93,
+      "all_metric_turn_passes": 96,
+      "routing_correctness_turn_passes": 99,
+      "instruction_fidelity_turn_passes": 97,
+      "instruction_fidelity_denominator": 100,
+      "input_tokens": 2391805,
+      "output_tokens": 20527,
+      "interaction_cost": 7.48332,
+      "full_run_seconds": 1749.55,
+      "artifacts": ".deepeval/baselines/sonnet4-full-20260919/results.json",
+      "sha256": "5cb63ce449082513eae9a636b31940dea80536fc3d5be9664c9b23bc39feae17"
+    },
+    "routing_matched_scaling": [
+      {
+        "agents": 10,
+        "baseline_all_metric_passes": "8/8",
+        "final_all_metric_passes": "8/8",
+        "baseline_input_tokens": 75119,
+        "final_input_tokens": 33568,
+        "baseline_interaction_cost": 0.247017,
+        "final_interaction_cost": 0.120309
+      },
+      {
+        "agents": 100,
+        "baseline_all_metric_passes": "7/8",
+        "final_all_metric_passes": "8/8",
+        "baseline_input_tokens": 122570,
+        "final_input_tokens": 36060,
+        "baseline_interaction_cost": 0.39171,
+        "final_interaction_cost": 0.13089
+      },
+      {
+        "agents": 1000,
+        "baseline_all_metric_passes": "8/8",
+        "final_all_metric_passes": "8/8",
+        "baseline_input_tokens": 510794,
+        "final_input_tokens": 36052,
+        "baseline_interaction_cost": 1.557432,
+        "final_interaction_cost": 0.130401
+      }
+    ],
+    "routing_optimization_validation_ledger": {
+      "total_reported_cost_including_judges": 4.492041234,
+      "note": "Rows have different case mixes and are an experiment ledger, not an aggregate performance trend.",
+      "runs": [
+        {
+          "name": "initial_candidate_list_and_optional_completion",
+          "all_metric_passes": "3/4",
+          "interaction_cost": 0.141114
+        },
+        {
+          "name": "useful_tool_visibility_and_explicit_end_turn",
+          "all_metric_passes": "2/2",
+          "interaction_cost": 0.028821,
+          "historical_baseline_interaction_cost": 0.071316
+        },
+        {
+          "name": "matched_1000_agent_cases",
+          "all_metric_passes": "3/3",
+          "interaction_cost": 0.050346,
+          "historical_baseline_interaction_cost": 0.568839
+        },
+        {
+          "name": "inspection_before_ownership_excerpts",
+          "all_metric_passes": "3/6",
+          "interaction_cost": 0.098541
+        },
+        {
+          "name": "inspection_with_ownership_excerpts",
+          "all_metric_passes": "6/6",
+          "interaction_cost": 0.102975
+        },
+        {
+          "name": "development_before_instruction_description_refinement",
+          "all_metric_passes": "29/32",
+          "interaction_cost": 0.523989
+        },
+        {
+          "name": "first_full_verification",
+          "all_metric_passes": "97/102",
+          "interaction_cost": 1.689582
+        },
+        {
+          "name": "targeted_instruction_preservation",
+          "all_metric_passes": "5/5",
+          "interaction_cost": 0.076764
+        },
+        {
+          "name": "final_full_verification",
+          "all_metric_passes": "98/102",
+          "interaction_cost": 1.695717
+        }
+      ]
+    },
+    "routing_development_optimization": {
+      "scenarios_passing": "26/29",
+      "turns_passing": "29/32",
+      "matched_turns": 28,
+      "matched_routing_passes": "25/28",
+      "matched_all_metric_passes": "25/28",
+      "matched_baseline_interaction_cost": 0.93141,
+      "matched_final_interaction_cost": 0.446262,
+      "input_tokens": 141638,
+      "output_tokens": 6605,
+      "interaction_model_calls": 35,
+      "judge_cost": 0.017694714,
+      "run_seconds": 280.73,
+      "offline_tests_passed": 95,
+      "candidate_recall_named_reuse_expectations": "86/86"
+    },
+    "initial_roster_search_experiment": {
+      "scenario_passes": 15,
+      "scenario_total": 29,
+      "turn_passes": 18,
+      "turn_total": 32,
+      "input_tokens": 461016,
+      "output_tokens": 8013,
+      "interaction_cost": 1.503243,
+      "judge_cost": 0.010860972,
+      "model_calls": 112,
+      "discovery_calls": {
+        "total": 22,
+        "searches": 16,
+        "inspections": 6
+      },
+      "artifacts": {
+        "inspection": ".deepeval/runs/20260919T234441-224af129/",
+        "standard": ".deepeval/runs/20260919T234725-dc8c30e1/"
+      },
+      "standard_run_seconds": 553.96,
+      "standard_summed_turn_seconds": 473.53,
+      "standard_http_request_seconds": 212.65,
+      "standard_pacing_seconds": 256.09,
+      "standard_judge_requests": 22,
+      "standard_total_interaction_and_judge_cost": 1.514103972,
+      "inspection_run": {
+        "scenario_passes": "1/6",
+        "input_tokens": 102890,
+        "output_tokens": 1795,
+        "interaction_model_calls": 25,
+        "discovery_search_calls": 6,
+        "inspection_calls": 0,
+        "interaction_cost": 0.335595,
+        "judge_cost": 2.5158e-05,
+        "summed_turn_seconds": 99.65
+      },
+      "combined_inspection_and_standard_cost": 1.84972413,
+      "matched_standard_comparison": {
+        "turns": 28,
+        "baseline_routing_passes": "25/28",
+        "search_iteration_routing_passes": "17/28",
+        "baseline_all_metric_passes": "25/28",
+        "search_iteration_all_metric_passes": "17/28",
+        "baseline_input_tokens": 282685,
+        "search_iteration_input_tokens": 390319,
+        "baseline_output_tokens": 5557,
+        "search_iteration_output_tokens": 6708,
+        "baseline_interaction_cost": 0.93141,
+        "search_iteration_interaction_cost": 1.271577,
+        "baseline_summed_paced_turn_seconds": 339.55,
+        "search_iteration_summed_paced_turn_seconds": 399.05
+      },
+      "unmatched_100_agent_variants": {
+        "routing_passes": "1/4",
+        "input_tokens": 70697,
+        "output_tokens": 1305,
+        "interaction_model_calls": 17,
+        "interaction_cost": 0.231666
+      }
+    },
+    "gmail_calibration": {
+      "fixture_version": 3,
+      "grader_version": 6,
+      "authoritative_trace_set": "validated-full",
+      "key_corrections": [
+        "Quoted exact-text requests replaced ambiguous boundaries.",
+        "Status, commitment, date, and completion assertions require supporting evidence.",
+        "Reporting accepts truthful mixed success and failure claims.",
+        "Judge evidence removes duplicate read snapshots without removing query, mutation, error, source-message, or final-state evidence."
+      ],
+      "development_run": {
+        "scenario_passes": 27,
+        "scenario_total": 28,
+        "agent_inference_estimate": 2.0623635,
+        "judge_cost": 0.189250884,
+        "offline_tests_passed": 51,
+        "live_judge_checks_passed": 4
+      },
+      "superseded_full_run": {
+        "scenario_passes": 32,
+        "agent_failures": 6,
+        "unavailable": 2,
+        "agent_inference_estimate": 2.9209875,
+        "judge_cost": 0.413959734,
+        "reason_not_used": "It predates fixture and grader corrections and is not a model-quality baseline."
+      },
+      "targeted_fixture_and_launcher_rerun": {
+        "scenario_passes": "4/4",
+        "agent_inference_estimate": 0.293988,
+        "judge_cost": 0.104922966,
+        "offline_tests_passed": 54,
+        "live_judge_checks_passed": 6
+      },
+      "smoke_and_rubric_checks": {
+        "corrected_smoke": {
+          "scenario_passes": 7,
+          "scenario_total": 8,
+          "semantic_false_negatives": 1
+        },
+        "reporting_rubric_live_checks_passed": 8,
+        "final_offline_tests_passed": 55,
+        "compact_regrade": {
+          "semantic_checks_passed": true,
+          "unavailable_reason": "contacts API is outside the adapter boundary"
+        }
+      }
+    }
+  },
+  "cleanup_validation": {
+    "source_revision": "a82ac5e",
+    "pre_cleanup_revision": "e4f2df36108aab271ee86c73062b092f14fe1cb3",
+    "offline_tests_passed": 200,
+    "existing_test_cases_preserved": 470,
+    "new_regression_tests": 2,
+    "explicit_live_and_capacity_cases": 272,
+    "gmail_saved_records_checked": 82,
+    "command": "OPENROUTER_API_KEY=offline-placeholder python -m pytest -q",
+    "production_unchanged": true,
+    "primary_measurements_unchanged": true,
+    "fixture_and_rubric_contracts_unchanged": true,
+    "paid_calls": 0,
+    "quality_gate_log": "/tmp/eval-cleanup-quality-gate.log"
   }
 }

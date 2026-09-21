@@ -176,6 +176,6 @@ Offline checks cover frozen baseline membership, deterministic nested population
 
 ## Artifacts
 
-Campaign: `.deepeval/campaigns/difficult-routing-v1/`. Each variant has its roster fingerprint, reconstruction metadata, capacity/process measurements, live outcome, and full available model/tool traces. `spend.json` and `pricing_evidence.json` support the cost totals; `fixtures.json`, `source_manifest.json`, and `fixture_revision.json` identify the authored inputs and correction. Artifacts are local and Git-ignored; the fixture source and this report are committed. See [benchmark commands and implementation](difficult_agent_routing.md).
+Campaign: `.deepeval/campaigns/difficult-routing-v1/`. Each variant has its roster fingerprint, reconstruction metadata, capacity/process measurements, live outcome, and full available model/tool traces. `spend.json` and `pricing_evidence.json` support the cost totals; `fixtures.json`, `source_manifest.json`, and `fixture_revision.json` identify the authored inputs and correction. Artifacts are local and Git-ignored; the fixture source and this report are committed. See [benchmark commands and implementation](../difficult_routing.md).
 
-Per-case tokens, charges, latency, memory, coverage, and failure reasons are also committed in [the measurement summary](difficult_agent_routing_results.json). Full traces remain in the local campaign directory.
+Per-case tokens, charges, latency, memory, coverage, and failure reasons are also committed in [the measurement summary](difficult_routing_results.json). Full traces remain in the local campaign directory.

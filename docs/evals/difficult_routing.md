@@ -31,21 +31,21 @@ The initial prompt-byte estimate excludes tool schemas and is labeled as a bytes
 `campaign_budget.py` snapshots public OpenRouter endpoint pricing, reserves a conservative cost before every attempt, and settles against provider-reported charges. One file-locked ledger spans interaction, Jev, fallback, retries, and separate staged commands. Cross-process request pacing is persisted. Missing usage, interrupted requests, or unknown pricing stop further paid requests. Unresolved charges retain their reservation. No output-limit parameter is changed: the reservation uses the advertised provider maximum, and includes the highest published price tier.
 
 ```bash
-.venv/bin/python -m pytest evals/agent_overload -m 'not live and not routing_capacity'
+.venv/bin/python -m pytest tests/unit tests/integration -q
 
 RUN_CAPACITY_EVALS=1 .venv/bin/python -m pytest \
-  evals/agent_overload/test_routing_scale.py -m routing_capacity
+  tests/capacity -m routing_capacity
 
 .venv/bin/python -c 'from evals.agent_overload.campaign_budget import initialize_prices; from evals.agent_overload.routing_campaign import campaign_dir; initialize_prices(campaign_dir())'
 
 RUN_LIVE_EVALS=1 EVAL_MAX_SPEND_USD=10 .venv/bin/deepeval test run \
-  evals/agent_overload/test_routing_challenges.py -m routing_challenge -k '_100]'
+  evals/live/agent_overload -m routing_challenge -k '_100]'
 
 RUN_LIVE_EVALS=1 EVAL_MAX_SPEND_USD=10 .venv/bin/deepeval test run \
-  evals/agent_overload/test_routing_scale.py -m routing_scale
+  evals/live/agent_overload -m routing_scale
 
 RUN_LIVE_EVALS=1 EVAL_MAX_SPEND_USD=10 .venv/bin/deepeval test run \
-  evals/agent_overload/test_routing_challenges.py -m routing_challenge -k 'not _100]'
+  evals/live/agent_overload -m routing_challenge -k 'not _100]'
 ```
 
 Load `OPENROUTER_API_KEY` into the process environment securely before live execution. All paid cases remain sequential. Local capacity measurement needs permission to inspect child-process RSS (`ps` on macOS/Linux). Do not run live tests with pytest parallelization.
@@ -54,4 +54,4 @@ Load `OPENROUTER_API_KEY` into the process environment securely before live exec
 
 Report initial owner coverage, routing correctness, semantic fidelity, discovery recovery, model/discovery calls, tokens, charges, latency, pacing, and resource failures separately. Owner coverage is not applicable to new-agent tasks. A shortlist miss recovered by correct routing counts as recovery; traces establish whether recovery used discovery or directly reused a known name.
 
-Do not compare totals across different case mixes. Compare the same scenario across sizes. Preserve small-roster failures as distinct from scale-induced failures. Capacity failures and budget/provider/judge failures are unavailable outcomes, not routing errors. No minimum failure rate is required. Measured findings belong in the separate results report.
+Do not compare totals across different case mixes. Compare the same scenario across sizes. Preserve small-roster failures as distinct from scale-induced failures. Capacity failures and budget/provider/judge failures are unavailable outcomes, not routing errors. No minimum failure rate is required. Measured findings are in the [difficult-routing results report](reports/difficult_routing_results.md). These collections were not included in the Gemini comparison.

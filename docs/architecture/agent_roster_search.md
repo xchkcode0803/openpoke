@@ -52,20 +52,20 @@ The baseline case definitions and graders remain frozen. The six inspection case
 
 ```bash
 # Offline tests and coverage
-DEEPEVAL_TELEMETRY_OPT_OUT=YES .venv/bin/python -m pytest evals/agent_overload -m 'not live' \
+DEEPEVAL_TELEMETRY_OPT_OUT=YES .venv/bin/python -m pytest tests/unit tests/integration -q \
   --cov=server.agents.interaction_agent --cov-branch --cov-report=term-missing --cov-report=json
 
 # Complete statement/branch coverage for discovery
-DEEPEVAL_TELEMETRY_OPT_OUT=YES .venv/bin/python -m pytest evals/agent_overload/test_discovery.py \
+DEEPEVAL_TELEMETRY_OPT_OUT=YES .venv/bin/python -m pytest tests/integration/agent_overload/test_discovery.py \
   --cov=server.agents.interaction_agent.discovery --cov-branch --cov-fail-under=100
 
 # A targeted live case (keep the model and grading unchanged)
 RUN_LIVE_EVALS=1 DEEPEVAL_TELEMETRY_OPT_OUT=YES .venv/bin/deepeval test run \
-  evals/agent_overload/test_routing.py -m standard -k routes_existing_and_new_task
+  evals/live/agent_overload/test_routing.py -m standard -k routes_existing_and_new_task
 
 # Development verification after targeted gates
 RUN_LIVE_EVALS=1 DEEPEVAL_TELEMETRY_OPT_OUT=YES .venv/bin/deepeval test run \
-  evals/agent_overload/test_routing.py -m standard
+  evals/live/agent_overload/test_routing.py -m standard
 ```
 
 Review all changed executable lines and branches, not just aggregate legacy-module coverage. Keep live execution sequential with existing shared provider pacing. Do not use result-cache or parallel flags. Compare costs and behavior on matched cases, including all model calls. Measured outcomes and unsuccessful experiments belong in separate iteration reports.
