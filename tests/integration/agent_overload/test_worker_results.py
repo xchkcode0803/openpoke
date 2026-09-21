@@ -2,6 +2,7 @@
 
 import json
 
+from server.agents.execution_agent.agent import ExecutionAgent
 from server.agents.execution_agent.batch_manager import (
     ExecutionBatchManager,
     _CompletedExecution,
@@ -91,3 +92,26 @@ def test_interaction_prompt_checks_result_sufficiency() -> None:
     assert "does not prove that the original assignment is complete" in prompt
     assert "Compare `result` with `original_assignment`" in prompt
     assert "reuse that exact `agent_name`" in prompt
+
+
+def test_execution_message_keeps_task_and_source_context_separate() -> None:
+    agent = object.__new__(ExecutionAgent)
+
+    message = agent.build_messages_for_llm(
+        "Start a separate outage complaint.",
+        source_context=(
+            "Start a separate outage complaint; do not change renewal or billing work."
+        ),
+    )[0]
+    payload = json.loads(message["content"])
+
+    assert payload["assigned_task"] == "Start a separate outage complaint."
+    assert "do not change renewal or billing work" in payload["source_context"]
+    assert "Execute only assigned_task" in payload["source_context_policy"]
+
+
+def test_execution_message_without_source_context_is_backward_compatible() -> None:
+    agent = object.__new__(ExecutionAgent)
+    assert agent.build_messages_for_llm("Run scheduled reminder.") == [
+        {"role": "user", "content": "Run scheduled reminder."}
+    ]

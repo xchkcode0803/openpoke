@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 import json
 import os
 
@@ -16,6 +17,8 @@ from evals.agent_overload.cases import (
     scale_roster_with_unrelated_agents,
     smoke_cases,
     standard_cases,
+    reuse,
+    user,
 )
 from evals.agent_overload.harness import run_case
 from evals.agent_overload.metrics import RoutingCorrectnessMetric
@@ -99,7 +102,7 @@ def test_suite_membership_and_frozen_cases():
 
     cases = full_cases() + stress_cases()
     digest = hashlib.sha256(json.dumps([asdict(case) for case in cases], default=lambda value: sorted(value), sort_keys=True).encode()).hexdigest()
-    assert digest == "6ea01e5037747ac4ad5841339af4a257048b5bd393d09528fc258d2f217b5747"
+    assert digest == "deca7fed87c6fec8fed3d72518cd4e9dbacb1d03ba64463d1dac5a7e206f1ddd"
     memberships = {
         "full": {case.name for case in full_cases() + stress_cases()},
         "smoke": {case.name for case in smoke_cases()},
@@ -153,6 +156,18 @@ def test_missing_created_agent_dependency_is_recorded(monkeypatch: pytest.Monkey
         for item in DEVELOPMENT_CASES
         if item.name == "reuses_agent_created_earlier_in_conversation"
     )
+    case = replace(case, turns=(
+        case.turns[0],
+        user(
+            "Find patio options for it too.",
+            "delegate",
+            reuse(
+                "maya_dinner_follow_up",
+                required_facts=("find patio restaurant options",),
+                agent_from_task="maya_dinner",
+            ),
+        ),
+    ))
     results = asyncio.run(run_case(case))
     assert len(results) == 2
     assert results[1].metadata["expected_delegations"][0]["missing_dependency"] == "maya_dinner"

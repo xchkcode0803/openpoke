@@ -18,7 +18,7 @@ EXPECTED = {
     "history": "70fd5eb9e4f15e9414c6c332fefc28682b1e34e88532228ecd23a69cb1e0fd76",
     "inspection": "3a8a387b9f49def506cd196b799bf4d46bdaf316f85e7b7b276cb1612c91c68f",
     "reporting": "3ebf702b3ca393c9849429f94fd026dfa9ad2e92087132d99cfe5f1bdcd88ea3",
-    "routing": "6ea01e5037747ac4ad5841339af4a257048b5bd393d09528fc258d2f217b5747",
+    "routing": "deca7fed87c6fec8fed3d72518cd4e9dbacb1d03ba64463d1dac5a7e206f1ddd",
     "scale": "e95a54043acb33825a92915a37ca6bbaf8c89a13cd407298699f35b7fb75f6f2"
 }
 

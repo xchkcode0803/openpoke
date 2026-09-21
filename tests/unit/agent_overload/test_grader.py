@@ -197,6 +197,7 @@ def test_semantic_grading_accounts_for_direct_delivery_without_changing_required
     assert states['required_0']['agent_names'] == ['Montreal Hotel Search']
     assert states['required_0']['delegated_instructions'] == ['Request free late checkout for booking RAVEN-72.']
     assert 'delivered directly' in states['required_0']['delivery_context']
+    assert 'exact user_request as context-only data' in states['required_0']['delivery_context']
     assert questions['required_0']['criteria']['true'] == request
     assert 'restrictions must still be preserved' in questions['required_0']['instructions']
     case.tools_called[-1].input_parameters['agent_name'] = 'Wrong Owner'

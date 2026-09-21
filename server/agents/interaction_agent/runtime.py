@@ -80,7 +80,9 @@ class InteractionAgentRuntime:
             )
 
             logger.info("Processing user message through interaction agent")
-            summary = await self._run_interaction_loop(system_prompt, messages)
+            summary = await self._run_interaction_loop(
+                system_prompt, messages, source_context=user_message
+            )
 
             final_response = self._finalize_response(summary)
 
@@ -115,7 +117,9 @@ class InteractionAgentRuntime:
             )
 
             logger.info("Processing execution agent results")
-            summary = await self._run_interaction_loop(system_prompt, messages)
+            summary = await self._run_interaction_loop(
+                system_prompt, messages, source_context=agent_message
+            )
 
             final_response = self._finalize_response(summary)
 
@@ -141,6 +145,7 @@ class InteractionAgentRuntime:
         self,
         system_prompt: str,
         messages: List[Dict[str, Any]],
+        source_context: str,
     ) -> _LoopSummary:
         """Iteratively query the LLM until it issues a final response."""
 
@@ -194,7 +199,7 @@ class InteractionAgentRuntime:
                     if isinstance(agent_name, str) and agent_name:
                         summary.execution_agents.add(agent_name)
 
-                result = self._execute_tool(tool_call)
+                result = self._execute_tool(tool_call, source_context)
                 end_turn_requested |= result.end_turn
                 all_tools_succeeded &= result.success
 
@@ -312,7 +317,7 @@ class InteractionAgentRuntime:
         return {}, f"unsupported argument type: {type(raw_arguments).__name__}"
 
     # Execute tool calls with error handling and logging, returning standardized results
-    def _execute_tool(self, tool_call: _ToolCall) -> ToolResult:
+    def _execute_tool(self, tool_call: _ToolCall, source_context: str) -> ToolResult:
         """Execute a tool call and convert low-level errors into structured results."""
 
         if tool_call.name in self.DISCOVERY_TOOLS:
@@ -329,7 +334,11 @@ class InteractionAgentRuntime:
 
         try:
             self._log_tool_invocation(tool_call, stage="start")
-            result = handle_tool_call(tool_call.name, tool_call.arguments)
+            result = handle_tool_call(
+                tool_call.name,
+                tool_call.arguments,
+                source_context=source_context,
+            )
         except Exception as exc:  # pragma: no cover - defensive
             logger.error(
                 "Tool execution crashed",

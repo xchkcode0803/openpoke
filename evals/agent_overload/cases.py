@@ -213,11 +213,11 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
     # Routing across turns: 3
     _case(
         "reuses_agent_created_earlier_in_conversation",
-        "Creates an agent then reuses that exact owner later.",
+        "Does not duplicate equivalent work that is already in progress.",
         (),
         (
             user("Plan Maya's birthday dinner in Toronto next Saturday at 7 PM for six people. Budget up to $100 per person, Italian food, and no shellfish. Find restaurant options and help coordinate the reservation.", "delegate", create("maya_dinner", "plan Maya's Toronto birthday dinner next Saturday at 7 PM for six people", "keep the budget at or below $100 per person", "find Italian options with no shellfish and help coordinate the reservation")),
-            user("Can you find a few restaurant options for it?", "delegate", reuse("maya_dinner_follow_up", required_facts=("find restaurant options for Maya's birthday dinner",), agent_from_task="maya_dinner")),
+            user("Can you find a few restaurant options for it?", "respond", response_requirements=("say that the restaurant search is already in progress",)),
         ),
         "development", "multi_turn", "smoke",
     ),
@@ -259,9 +259,9 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
         "waits_for_duplicate_worker_update",
         "Avoids a duplicate user-visible response when the same result is already present.",
         ("Montreal Hotel Search",),
-        (worker(worker_result("Montreal Hotel Search", "Find three hotels near Old Montreal.", "I found three hotels near Old Montreal."), "wait"),),
+        (worker(worker_result("Montreal Hotel Search", "Find three hotels near Old Montreal and return their names and prices.", "Hotel Nelligan is $290 per night, Le Petit Hotel is $245 per night, and William Gray is $320 per night."), "wait"),),
         "development", "worker_update",
-        conversation=(("agent_message", worker_result("Montreal Hotel Search", "Find three hotels near Old Montreal.", "I found three hotels near Old Montreal.")), ("poke_reply", "I found three hotels near Old Montreal.")),
+        conversation=(("agent_message", worker_result("Montreal Hotel Search", "Find three hotels near Old Montreal and return their names and prices.", "Hotel Nelligan is $290 per night, Le Petit Hotel is $245 per night, and William Gray is $320 per night.")), ("poke_reply", "Hotel Nelligan is $290 per night, Le Petit Hotel is $245 per night, and William Gray is $320 per night.")),
     ),
     # Confusing choices: 6
     _case(

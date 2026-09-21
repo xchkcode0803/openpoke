@@ -170,6 +170,9 @@ class InstructionFidelityMetric(BaseMetric):
             ]
             delivery_context = (
                 "The instructions have been delivered directly to the listed execution agents. "
+                "Each execution agent also receives the exact user_request as context-only data, "
+                "with instructions to execute only delegated_instructions while preserving relevant "
+                "people, quantities, dates, restrictions, and success criteria from that context. "
                 "For reuse, the matched recipient is the existing internal owner of this task. "
                 "Asking that owner to do the work is accomplished by this delivery; it need not contact itself. "
                 "Routing correctness is checked separately. Judge the work assigned to these recipients, "

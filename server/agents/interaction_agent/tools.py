@@ -150,7 +150,13 @@ def inspect_agent(agent_name: str, offset: int = 0) -> ToolResult:
 
 
 # Create or reuse execution agent and dispatch instructions asynchronously
-def send_message_to_agent(agent_name: str, instructions: str, action: str, end_turn: bool = False) -> ToolResult:
+def send_message_to_agent(
+    agent_name: str,
+    instructions: str,
+    action: str,
+    end_turn: bool = False,
+    source_context: str | None = None,
+) -> ToolResult:
     """Send instructions to an execution agent."""
     if type(end_turn) is not bool:
         raise ValueError("end_turn must be a boolean")
@@ -164,7 +170,11 @@ def send_message_to_agent(agent_name: str, instructions: str, action: str, end_t
 
     async def _execute_async() -> None:
         try:
-            result = await _EXECUTION_BATCH_MANAGER.execute_agent(agent_name, instructions)
+            result = await _EXECUTION_BATCH_MANAGER.execute_agent(
+                agent_name,
+                instructions,
+                source_context=source_context,
+            )
             status = "SUCCESS" if result.success else "FAILED"
             logger.info(f"Agent '{agent_name}' completed: {status}")
         except Exception as exc:  # pragma: no cover - defensive
@@ -264,7 +274,12 @@ def get_tool_schemas():
 
 
 # Route tool calls to appropriate handlers with argument validation and error handling
-def handle_tool_call(name: str, arguments: Any) -> ToolResult:
+def handle_tool_call(
+    name: str,
+    arguments: Any,
+    *,
+    source_context: str | None = None,
+) -> ToolResult:
     """Handle tool calls from interaction agent."""
     try:
         if isinstance(arguments, str):
@@ -275,7 +290,7 @@ def handle_tool_call(name: str, arguments: Any) -> ToolResult:
             return ToolResult(success=False, payload={"error": "Invalid arguments format"})
 
         if name == "send_message_to_agent":
-            return send_message_to_agent(**args)
+            return send_message_to_agent(**args, source_context=source_context)
         if name == "search_agents":
             return search_agents(**args)
         if name == "inspect_agent":
