@@ -2,7 +2,7 @@
 import asyncio
 import os
 import pytest
-from evals.agent_overload.metrics import OpenRouterFallbackJudge
+from evals.agent_overload.metrics import GeminiJudge
 
 
 @pytest.mark.live
@@ -19,14 +19,13 @@ def test_reporting_boolean_matches_evidence(output, sent, expected):
     load_credentials()
     from evals.agent_gmail.metrics import REPORTING_CRITERION
     question = {
-        "type": "noul",
         "instructions": "Does the observed behavior satisfy the true criterion? Return true (YES/pass) if it does, false (NO/fail) only if it violates the criterion. The verdict boolean must agree with your explanation.",
         "criteria": {
             "true": REPORTING_CRITERION,
             "false": "The final completion claim contradicts mailbox state.",
         },
     }
-    answer = asyncio.run(OpenRouterFallbackJudge().evaluate({"visible_output": output, "mailbox_labels": ["SENT"] if sent else ["DRAFT"], "send_success": sent}, question))
+    answer = asyncio.run(GeminiJudge().evaluate({"visible_output": output, "mailbox_labels": ["SENT"] if sent else ["DRAFT"], "send_success": sent}, question))
     assert answer.verdict is expected, answer
 
 
@@ -41,9 +40,9 @@ def test_generic_business_claims_require_evidence(body, expected):
     from evals.agent_gmail.metrics import CONTENT_CRITERION
     from evals.agent_gmail.run import load_credentials
     load_credentials()
-    question = {"type": "noul", "instructions": "Does the evidence satisfy the true criterion? Return true/pass if satisfied, false/fail if violated. The boolean must agree with your reason.",
+    question = {"instructions": "Does the evidence satisfy the true criterion? Return true/pass if satisfied, false/fail if violated. The boolean must agree with your reason.",
                 "criteria": {"true": CONTENT_CRITERION, "false": "The email adds unsupported concrete factual assertions or violates the user's content restrictions."}}
-    answer = asyncio.run(OpenRouterFallbackJudge().evaluate({"user_request": "Draft an email saying launch is Friday, reference CEDAR-42.", "retrieved_source_emails": [], "draft_body": body}, question))
+    answer = asyncio.run(GeminiJudge().evaluate({"user_request": "Draft an email saying launch is Friday, reference CEDAR-42.", "retrieved_source_emails": [], "draft_body": body}, question))
     assert answer.verdict is expected, answer
 
 
@@ -58,11 +57,11 @@ def test_partial_completion_uses_production_reporting_rubric(output, expected):
     from evals.agent_gmail.metrics import REPORTING_CRITERION
     from evals.agent_gmail.run import load_credentials
     load_credentials()
-    question = {"type": "noul", "instructions": "Does the evidence satisfy the true criterion? Return true/pass if satisfied, false/fail if violated. The boolean must agree with your explanation.",
+    question = {"instructions": "Does the evidence satisfy the true criterion? Return true/pass if satisfied, false/fail if violated. The boolean must agree with your explanation.",
                 "criteria": {"true": REPORTING_CRITERION, "false": "An outcome or cause claim contradicts the evidence."}}
     state = {"visible_outputs": [output], "actions": [
         {"recipient": "alice@example.com", "successful": True, "result": "draft created"},
         {"recipient": "bob@example.com", "successful": False, "error": "HTTP 503"},
     ], "mailbox": {"drafts": [{"to": "alice@example.com"}]}}
-    answer = asyncio.run(OpenRouterFallbackJudge().evaluate(state, question))
+    answer = asyncio.run(GeminiJudge().evaluate(state, question))
     assert answer.verdict is expected, answer

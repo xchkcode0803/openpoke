@@ -33,9 +33,16 @@ class _StubExecutionResult:
 class _StubBatchManager:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
+        self.source_contexts: list[str | None] = []
 
-    async def execute_agent(self, agent_name: str, instructions: str) -> _StubExecutionResult:
+    async def execute_agent(
+        self,
+        agent_name: str,
+        instructions: str,
+        source_context: str | None = None,
+    ) -> _StubExecutionResult:
         self.calls.append((agent_name, instructions))
+        self.source_contexts.append(source_context)
         return _StubExecutionResult()
 
 
@@ -105,8 +112,8 @@ class _TracingInteractionRuntime:
             return response
 
         @observe(type="tool")
-        def recorded_execute_tool(tool_call: Any) -> Any:
-            result = original_execute_tool(tool_call)
+        def recorded_execute_tool(tool_call: Any, source_context: str) -> Any:
+            result = original_execute_tool(tool_call, source_context)
             arguments = {
                 key: value
                 for key, value in tool_call.arguments.items()

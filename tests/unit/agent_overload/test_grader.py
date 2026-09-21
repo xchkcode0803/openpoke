@@ -16,8 +16,7 @@ def test_routing_metrics_reexports_shared_judges() -> None:
 
     assert metrics.JudgeAnswer is judges.JudgeAnswer
     assert metrics.JudgeError is judges.JudgeError
-    assert metrics.OpenRouterJevJudge is judges.OpenRouterJevJudge
-    assert metrics.OpenRouterFallbackJudge is judges.OpenRouterFallbackJudge
+    assert metrics.GeminiJudge is judges.GeminiJudge
 
 
 def _routing_case(
@@ -65,7 +64,7 @@ def test_grading_does_not_depend_on_acknowledgement(acknowledgement):
         case.tools_called = [call for call in case.tools_called if call.name != "send_message_to_user"]
         case.actual_output = ""
     assert RoutingCorrectnessMetric().measure(case) == 1.0
-    semantic = InstructionFidelityMetric(_FakeJev(0.95), _FakeFallback(False))
+    semantic = InstructionFidelityMetric(_FakeJudge(True))
     assert semantic.measure(case) == 1.0
     case.tools_called = [call for call in case.tools_called if call.name != "send_message_to_agent"]
     assert RoutingCorrectnessMetric().measure(case) == 0.0
@@ -134,22 +133,14 @@ def test_deterministic_grader_records_missing_created_dependency() -> None:
     assert "required prior agent was not created" in metric.reason
 
 
-class _FakeJev:
-    def __init__(self, probability: float) -> None:
-        self.probability = probability
-
-    async def evaluate(self, state, questions):
-        return {key: JudgeAnswer(verdict=self.probability >= 0.5, probability=self.probability) for key in questions}
-
-
-class _FakeFallback:
+class _FakeJudge:
     def __init__(self, verdict: bool) -> None:
         self.verdict = verdict
         self.calls = 0
 
     async def evaluate(self, state, question):
         self.calls += 1
-        return JudgeAnswer(verdict=self.verdict, probability=None, fallback_used=True, reason="fake fallback")
+        return JudgeAnswer(verdict=self.verdict, reason="test verdict")
 
 
 def _semantic_case(instruction: str) -> LLMTestCase:
@@ -178,19 +169,79 @@ def _semantic_case(instruction: str) -> LLMTestCase:
     )
 
 
-def test_semantic_grader_accepts_confident_yes() -> None:
-    metric = InstructionFidelityMetric(_FakeJev(0.95), _FakeFallback(False))
+def test_semantic_grader_accepts_yes() -> None:
+    metric = InstructionFidelityMetric(_FakeJudge(True))
     assert asyncio.run(metric.a_measure(_semantic_case("Draft a repair-date follow-up and wait for approval before sending."))) == 1.0
 
 
-def test_semantic_grader_rejects_confident_no() -> None:
-    metric = InstructionFidelityMetric(_FakeJev(0.05), _FakeFallback(True))
+def test_semantic_grader_rejects_no() -> None:
+    metric = InstructionFidelityMetric(_FakeJudge(False))
     assert asyncio.run(metric.a_measure(_semantic_case("Draft and send the repair-date follow-up."))) == 0.0
 
 
-def test_semantic_grader_uses_fallback_for_uncertain_answer() -> None:
-    fallback = _FakeFallback(True)
-    metric = InstructionFidelityMetric(_FakeJev(0.5), fallback)
+def test_semantic_grader_checks_every_requirement_directly() -> None:
+    judge = _FakeJudge(True)
+    metric = InstructionFidelityMetric(judge)
     assert asyncio.run(metric.a_measure(_semantic_case("Draft the repair-date follow-up."))) == 1.0
-    assert fallback.calls == 4
-    assert all(item["probability"] == 0.5 and item["fallback_used"] for item in metric.score_breakdown.values())
+    assert judge.calls == 4
+    assert all(item == {"verdict": True, "reason": "test verdict"} for item in metric.score_breakdown.values())
+
+
+def test_semantic_grading_accounts_for_direct_delivery_without_changing_required_work():
+    case = _routing_case()
+    request = 'Ask the owner to request late checkout for booking RAVEN-72, only if free.'
+    case.input = request
+    case.metadata['expected_delegations'][0]['required_facts'] = [request]
+    case.tools_called[-1].input_parameters['instructions'] = 'Request free late checkout for booking RAVEN-72.'
+    questions, states = InstructionFidelityMetric()._questions(case)
+    assert states['required_0']['agent_names'] == ['Montreal Hotel Search']
+    assert states['required_0']['delegated_instructions'] == ['Request free late checkout for booking RAVEN-72.']
+    assert 'delivered directly' in states['required_0']['delivery_context']
+    assert 'exact user_request as context-only data' in states['required_0']['delivery_context']
+    assert questions['required_0']['criteria']['true'] == request
+    assert 'restrictions must still be preserved' in questions['required_0']['instructions']
+    case.tools_called[-1].input_parameters['agent_name'] = 'Wrong Owner'
+    assert RoutingCorrectnessMetric().measure(case) == 0
+    assert InstructionFidelityMetric()._questions(case) == ({}, {})
+
+
+def test_tax_fixture_states_tax_year_explicitly():
+    from evals.agent_overload.cases import full_cases
+    case = next(case for case in full_cases() if case.name == 'selects_current_tax_filing_agent')
+    assert case.turns[0].message == 'Continue my filing for the 2026 tax year.'
+    assert case.turns[0].delegations[0].acceptable_agent_names == ('2026 Tax Documents',)
+
+
+def test_prohibited_action_criterion_means_avoidance():
+    questions, _ = InstructionFidelityMetric()._questions(_semantic_case("Draft only; do not send."))
+    assert questions["forbidden_3"]["criteria"]["true"] == "The instruction avoids this prohibited action: send the email"
+
+
+@pytest.mark.parametrize('tool_name,arguments', [
+    ('wrong_tool', '{"verdict":true,"reason":"ok"}'),
+    ('submit_grade', '{broken'),
+    ('submit_grade', '{"verdict":"true","reason":"ok"}'),
+    ('submit_grade', '{"verdict":true}'),
+])
+def test_gemini_rejects_invalid_structured_grades(monkeypatch, tool_name, arguments):
+    import httpx
+    from evals.shared import judges
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'offline-test')
+    async def response(*args, **kwargs):
+        return httpx.Response(200, json={'choices': [{'message': {'tool_calls': [
+            {'function': {'name': tool_name, 'arguments': arguments}}
+        ]}}]})
+    monkeypatch.setattr(judges, 'post_with_retry', response)
+    with pytest.raises(JudgeError):
+        asyncio.run(judges.GeminiJudge().evaluate({}, {}))
+
+
+def test_gemini_provider_failure_is_not_a_verdict(monkeypatch):
+    import httpx
+    from evals.shared import judges
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'offline-test')
+    async def response(*args, **kwargs):
+        return httpx.Response(503, text='Unavailable')
+    monkeypatch.setattr(judges, 'post_with_retry', response)
+    with pytest.raises(JudgeError, match='503'):
+        asyncio.run(judges.GeminiJudge().evaluate({}, {}))

@@ -1,4 +1,4 @@
-"""Shared Jev decisions and structured Gemini fallback grading."""
+"""Shared structured Gemini grading."""
 
 from __future__ import annotations
 
@@ -10,16 +10,12 @@ from typing import Any, Protocol
 
 import httpx
 from .usage import effective_cost
-from .models import GEMINI, JEV
+from .models import GEMINI
 
 from evals.shared.http import post_with_retry
 from evals.agent_overload.provider import save_result
 
-JEV_MODEL = JEV
-FALLBACK_MODEL = GEMINI
-JEV_YES_THRESHOLD = 0.90
-JEV_NO_THRESHOLD = 0.10
-
+JUDGE_MODEL = GEMINI
 
 class JudgeError(RuntimeError):
     """Raised when a semantic judge cannot return a valid verdict."""
@@ -28,20 +24,14 @@ class JudgeError(RuntimeError):
 @dataclass(frozen=True)
 class JudgeAnswer:
     verdict: bool
-    probability: float | None
     reason: str = ""
-    fallback_used: bool = False
     input_tokens: int | None = None
     output_tokens: int | None = None
     cost: float | None = None
     latency_seconds: float | None = None
 
 
-class JevJudge(Protocol):
-    async def evaluate(self, state: dict[str, Any], questions: dict[str, dict[str, Any]]) -> dict[str, JudgeAnswer]: ...
-
-
-class FallbackJudge(Protocol):
+class SemanticJudge(Protocol):
     async def evaluate(self, state: dict[str, Any], question: dict[str, Any]) -> JudgeAnswer: ...
 
 
@@ -64,47 +54,8 @@ def _usage(payload: dict[str, Any]) -> tuple[int | None, int | None, float | Non
     )
 
 
-class OpenRouterJevJudge:
-    """Call Jev through OpenRouter's Decisions endpoint."""
-
-    async def evaluate(self, state: dict[str, Any], questions: dict[str, dict[str, Any]]) -> dict[str, JudgeAnswer]:
-        started = time.perf_counter()
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await post_with_retry(client,
-                    "https://openrouter.ai/api/alpha/decisions",
-                    headers={"Authorization": f"Bearer {_api_key()}", "Content-Type": "application/json"},
-                    json={"model": JEV_MODEL, "state": state, "questions": questions},
-                )
-        except httpx.HTTPError as exc:
-            raise JudgeError(f"Jev request failed: {exc}") from exc
-        if response.is_error:
-            raise JudgeError(f"Jev request failed ({response.status_code}): {response.text}")
-        payload = response.json()
-        input_tokens, output_tokens, cost = _usage(payload)
-        save_result("judge_usage.jsonl", {"model": JEV_MODEL, "input_tokens": input_tokens, "output_tokens": output_tokens, "cost": cost, "latency_seconds": time.perf_counter() - started})
-        answers = payload.get("answers")
-        if not isinstance(answers, dict):
-            raise JudgeError("Jev response did not contain answers")
-        result: dict[str, JudgeAnswer] = {}
-        for key in questions:
-            answer = answers.get(key)
-            probability = answer.get("noul") if isinstance(answer, dict) else None
-            if not isinstance(probability, (int, float)):
-                raise JudgeError(f"Jev answer for {key} did not contain a Noul probability")
-            result[key] = JudgeAnswer(
-                verdict=probability >= 0.5,
-                probability=float(probability),
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cost=cost,
-                latency_seconds=time.perf_counter() - started,
-            )
-        return result
-
-
-class OpenRouterFallbackJudge:
-    """Use Gemini tool calling for the few Jev judgments near the boundary."""
+class GeminiJudge:
+    """Return one structured verdict and reason for a semantic requirement."""
 
     async def evaluate(self, state: dict[str, Any], question: dict[str, Any]) -> JudgeAnswer:
         started = time.perf_counter()
@@ -135,7 +86,7 @@ class OpenRouterFallbackJudge:
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers={"Authorization": f"Bearer {_api_key()}", "Content-Type": "application/json"},
                     json={
-                        "model": FALLBACK_MODEL,
+                        "model": JUDGE_MODEL,
                         "messages": [{"role": "user", "content": json.dumps(prompt)}],
                         "tools": [schema],
                         "tool_choice": {"type": "function", "function": {"name": "submit_grade"}},
@@ -143,28 +94,26 @@ class OpenRouterFallbackJudge:
                     },
                 )
         except httpx.HTTPError as exc:
-            raise JudgeError(f"Fallback request failed: {exc}") from exc
+            raise JudgeError(f"Gemini judge request failed: {exc}") from exc
         if response.is_error:
-            raise JudgeError(f"Fallback request failed ({response.status_code}): {response.text}")
+            raise JudgeError(f"Gemini judge request failed ({response.status_code}): {response.text}")
         payload = response.json()
         message = ((payload.get("choices") or [{}])[0].get("message") or {})
         tool_calls = message.get("tool_calls") or []
-        if not tool_calls:
-            raise JudgeError("Fallback judge did not call submit_grade")
+        if len(tool_calls) != 1 or (tool_calls[0].get("function") or {}).get("name") != "submit_grade":
+            raise JudgeError("Gemini judge must return exactly one submit_grade call")
         raw = ((tool_calls[0].get("function") or {}).get("arguments"))
         try:
             parsed = json.loads(raw) if isinstance(raw, str) else raw
         except json.JSONDecodeError as exc:
-            raise JudgeError("Fallback judge returned invalid grade JSON") from exc
-        if not isinstance(parsed, dict) or not isinstance(parsed.get("verdict"), bool):
-            raise JudgeError("Fallback judge returned an invalid verdict")
+            raise JudgeError("Gemini judge returned invalid grade JSON") from exc
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("verdict"), bool) or not isinstance(parsed.get("reason"), str):
+            raise JudgeError("Gemini judge returned an invalid verdict")
         input_tokens, output_tokens, cost = _usage(payload)
-        save_result("judge_usage.jsonl", {"model": FALLBACK_MODEL, "input_tokens": input_tokens, "output_tokens": output_tokens, "cost": cost, "latency_seconds": time.perf_counter() - started})
+        save_result("judge_usage.jsonl", {"model": JUDGE_MODEL, "input_tokens": input_tokens, "output_tokens": output_tokens, "cost": cost, "latency_seconds": time.perf_counter() - started})
         return JudgeAnswer(
             verdict=parsed["verdict"],
-            probability=None,
-            reason=str(parsed.get("reason", "")),
-            fallback_used=True,
+            reason=parsed["reason"],
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost=cost,

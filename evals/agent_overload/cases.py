@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import json
 from random import Random
 from typing import Literal
 
@@ -99,6 +100,18 @@ def worker(
     response_requirements: tuple[str, ...] = (),
 ) -> RoutingTurn:
     return RoutingTurn("execution_agent", message, expected_action, delegations, response_requirements)
+
+
+def worker_result(agent_name: str, original_assignment: str, result: str) -> str:
+    """Match the production worker-result envelope used by the batch manager."""
+
+    payload = [{
+        "agent_name": agent_name,
+        "execution_status": "execution_succeeded",
+        "original_assignment": original_assignment,
+        "result": result,
+    }]
+    return "<execution_results>\n" + json.dumps(payload) + "\n</execution_results>"
 
 
 def _case(
@@ -200,11 +213,11 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
     # Routing across turns: 3
     _case(
         "reuses_agent_created_earlier_in_conversation",
-        "Creates an agent then reuses that exact owner later.",
+        "Does not duplicate equivalent work that is already in progress.",
         (),
         (
             user("Plan Maya's birthday dinner in Toronto next Saturday at 7 PM for six people. Budget up to $100 per person, Italian food, and no shellfish. Find restaurant options and help coordinate the reservation.", "delegate", create("maya_dinner", "plan Maya's Toronto birthday dinner next Saturday at 7 PM for six people", "keep the budget at or below $100 per person", "find Italian options with no shellfish and help coordinate the reservation")),
-            user("Can you find a few restaurant options for it?", "delegate", reuse("maya_dinner_follow_up", required_facts=("find restaurant options for Maya's birthday dinner",), agent_from_task="maya_dinner")),
+            user("Can you find a few restaurant options for it?", "respond", response_requirements=("say that the restaurant search is already in progress",)),
         ),
         "development", "multi_turn", "smoke",
     ),
@@ -223,7 +236,7 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
         "requests_details_after_incomplete_worker_update",
         "Reuses the reporting worker when its result omits the useful details.",
         ("Montreal Hotel Search",),
-        (worker("[SUCCESS] Montreal Hotel Search: I found three hotels near Old Montreal.", "delegate", reuse("hotel_details", "Montreal Hotel Search", required_facts=("provide the three hotel names and details",))),),
+        (worker(worker_result("Montreal Hotel Search", "Find three hotels near Old Montreal and return their names and details.", "I found three hotels near Old Montreal."), "delegate", reuse("hotel_details", "Montreal Hotel Search", required_facts=("provide the three hotel names and details",))),),
         "development", "worker_update", "smoke", "semantic",
     ),
     # Execution-agent updates: 3
@@ -231,14 +244,14 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
         "reports_completed_worker_update_without_redelegating",
         "Reports a completed worker result without restarting the task.",
         ("Montreal Hotel Search",),
-        (worker("[SUCCESS] Montreal Hotel Search: Hotel Nelligan is $290 per night, Le Petit Hotel is $245 per night, and William Gray is $320 per night. All three are near Old Montreal.", "respond", response_requirements=("report the three named hotels and their prices",)),),
+        (worker(worker_result("Montreal Hotel Search", "Find three hotels near Old Montreal and return their names and prices.", "Hotel Nelligan is $290 per night, Le Petit Hotel is $245 per night, and William Gray is $320 per night. All three are near Old Montreal."), "respond", response_requirements=("report the three named hotels and their prices",)),),
         "development", "worker_update", "smoke", "semantic",
     ),
     _case(
         "routes_requested_next_step_after_worker_update",
         "Continues an explicitly requested next step after a worker result.",
         ("Email Landlord About Kitchen Leak",),
-        (worker("[SUCCESS] Email Landlord About Kitchen Leak: The landlord offered Tuesday at 10 AM.", "delegate", reuse("landlord", "Email Landlord About Kitchen Leak", required_facts=("draft a reply about Tuesday at 10 AM", "do not send"), forbidden_facts=("send the reply",))),),
+        (worker(worker_result("Email Landlord About Kitchen Leak", "Check whether the landlord replied about the kitchen leak.", "The landlord offered Tuesday at 10 AM."), "delegate", reuse("landlord", "Email Landlord About Kitchen Leak", required_facts=("draft a reply about Tuesday at 10 AM", "do not send"), forbidden_facts=("send the reply",))),),
         "development", "worker_update", "semantic",
         conversation=(("user_message", "When the landlord replies, draft a response but do not send it."),),
     ),
@@ -246,9 +259,9 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
         "waits_for_duplicate_worker_update",
         "Avoids a duplicate user-visible response when the same result is already present.",
         ("Montreal Hotel Search",),
-        (worker("[SUCCESS] Montreal Hotel Search: I found three hotels near Old Montreal.", "wait"),),
+        (worker(worker_result("Montreal Hotel Search", "Find three hotels near Old Montreal and return their names and prices.", "Hotel Nelligan is $290 per night, Le Petit Hotel is $245 per night, and William Gray is $320 per night."), "wait"),),
         "development", "worker_update",
-        conversation=(("agent_message", "[SUCCESS] Montreal Hotel Search: I found three hotels near Old Montreal."), ("poke_reply", "I found three hotels near Old Montreal.")),
+        conversation=(("agent_message", worker_result("Montreal Hotel Search", "Find three hotels near Old Montreal and return their names and prices.", "Hotel Nelligan is $290 per night, Le Petit Hotel is $245 per night, and William Gray is $320 per night.")), ("poke_reply", "Hotel Nelligan is $290 per night, Le Petit Hotel is $245 per night, and William Gray is $320 per night.")),
     ),
     # Confusing choices: 6
     _case(
@@ -281,9 +294,9 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
     ),
     _case(
         "selects_current_tax_filing_agent",
-        "Uses the current year rather than an older filing.",
+        "Uses the explicitly requested tax year rather than an older filing.",
         ("2025 Tax Documents", "2026 Tax Documents"),
-        (user("Continue this year's tax filing.", "delegate", reuse("taxes", "2026 Tax Documents", required_facts=("continue the 2026 tax filing",))),),
+        (user("Continue my filing for the 2026 tax year.", "delegate", reuse("taxes", "2026 Tax Documents", required_facts=("continue the 2026 tax filing",))),),
         "development", "confusing",
     ),
     _case(
@@ -317,7 +330,7 @@ HELD_OUT_CASES: tuple[RoutingCase, ...] = (
     _case("held_out_uses_context_for_terse_follow_up", "Uses the latest visible topic for a terse follow-up.", ("Dentist Appointment", "Annual Eye Exam"), (user("Any earlier options?", "delegate", reuse("dentist", "Dentist Appointment", required_facts=("find earlier dentist options",))),), "held_out", "conversation", conversation=(("user_message", "Please find an earlier dentist appointment."),)),
     _case("held_out_routes_two_existing_tasks", "Covers two independent requests.", ("Montreal Flight Search", "Monthly Rent Reminder"), (user("Check cheaper Montreal flights and remind me when rent is due.", "delegate", reuse("flights", "Montreal Flight Search", required_facts=("check cheaper Montreal flights",)), reuse("rent", "Monthly Rent Reminder", required_facts=("check when rent is due",))),), "held_out", "multi_task"),
     _case("held_out_preserves_no_purchase_restriction", "Keeps a purchase restriction in delegated work.", ("Laptop Purchase Research",), (user("Find lightweight laptops, but do not buy anything.", "delegate", reuse("laptop", "Laptop Purchase Research", required_facts=("find lightweight laptops", "do not buy"), forbidden_facts=("buy a laptop",))),), "held_out", "semantic"),
-    _case("held_out_reports_worker_update", "Reports a scripted worker result.", ("Dentist Appointment",), (worker("[SUCCESS] Dentist Appointment: An opening is available Tuesday at 9 AM.", "respond", response_requirements=("report the Tuesday opening",)),), "held_out", "worker_update", "semantic"),
+    _case("held_out_reports_worker_update", "Reports a scripted worker result.", ("Dentist Appointment",), (worker(worker_result("Dentist Appointment", "Find an earlier dentist appointment.", "An opening is available Tuesday at 9 AM."), "respond", response_requirements=("report the Tuesday opening",)),), "held_out", "worker_update", "semantic"),
 )
 
 

@@ -40,14 +40,21 @@ class ExecutionAgentRuntime:
             raise ValueError("OpenRouter API key not configured. Set OPENROUTER_API_KEY environment variable.")
 
     # Main execution loop for running agent with LLM calls and tool execution
-    async def execute(self, instructions: str) -> ExecutionResult:
+    async def execute(
+        self,
+        instructions: str,
+        source_context: Optional[str] = None,
+    ) -> ExecutionResult:
         """Execute the agent with given instructions."""
         try:
             # Build system prompt with history
             system_prompt = self.agent.build_system_prompt_with_history()
 
             # Start conversation with the instruction
-            messages = [{"role": "user", "content": instructions}]
+            messages = self.agent.build_messages_for_llm(
+                instructions,
+                source_context=source_context,
+            )
             tools_executed: List[str] = []
             final_response: Optional[str] = None
 

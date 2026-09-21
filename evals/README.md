@@ -43,6 +43,6 @@ RUN_INDEX_CAPACITY=1 python -m pytest tests/capacity/agent_overload/test_indexed
 ```
 
 Production and live inference use `google/gemini-3.8-flash`. Semantic graders use
-`typesafe/jev-1.13` with Gemini fallback. Live runs retain their own local traces,
+`google/gemini-3.8-flash`. Live runs retain their own local traces,
 usage, and cost records; do not commit them. Read the [documentation index](../docs/README.md)
 for benchmark design and limits.

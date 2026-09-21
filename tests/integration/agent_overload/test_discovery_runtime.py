@@ -79,7 +79,9 @@ def test_existing_delegation_behavior(runtime_env):
     assert result.success and result.execution_agents_used == 2
     assert set(env.roster.get_agents()) == {"Hotels", "Flights"}
     assert len(env.workers.calls) == 2
+    assert env.workers.source_contexts == ["Continue the task", "Continue the task"]
     assert list(env.logs.iter_entries("Hotels"))[0][2] == "More hotels"
+    assert "Continue the task" not in list(env.logs.iter_entries("Hotels"))[0][2]
     assert result.response == "On it"
 
 

@@ -106,9 +106,13 @@ async def _run(case, config, completion, root, emulator, recorder, record):
         return call
 
     original_handle = it.handle_tool_call
-    def interaction_tool(name, arguments):
+    def interaction_tool(name, arguments, *, source_context=None):
         with recorder.span("interaction_tool", name=name, arguments=arguments) as event:
-            result = original_handle(name, arguments)
+            result = original_handle(
+                name,
+                arguments,
+                source_context=source_context,
+            )
             event["result"] = asdict(result)
             return result
 

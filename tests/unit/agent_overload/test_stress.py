@@ -95,13 +95,13 @@ def test_judge_usage_is_recorded_once_per_request(monkeypatch):
     records = []
 
     async def response(*args, **kwargs):
-        return httpx.Response(200, json={"answers": {"a": {"noul": 0.95}, "b": {"noul": 0.95}}, "usage": {"input_tokens": 100, "output_tokens": 5, "cost": 0.01}})
+        return httpx.Response(200, json={"choices": [{"message": {"tool_calls": [{"function": {"name": "submit_grade", "arguments": '{"verdict":true,"reason":"preserved"}'}}]}}], "usage": {"input_tokens": 100, "output_tokens": 5, "cost": 0.01}})
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "offline-test")
     monkeypatch.setattr(judges, "post_with_retry", response)
     monkeypatch.setattr(judges, "save_result", lambda filename, record: records.append(record))
-    answers = asyncio.run(judges.OpenRouterJevJudge().evaluate({}, {"a": {}, "b": {}}))
-    assert len(answers) == 2
+    answer = asyncio.run(judges.GeminiJudge().evaluate({}, {"instructions": "Check work"}))
+    assert answer.verdict is True
     assert len(records) == 1
     assert records[0]["cost"] == 0.01
 

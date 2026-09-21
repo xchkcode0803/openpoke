@@ -11,6 +11,6 @@ eval-only adapter returns explicit errors for contacts and uploaded attachments
 rather than fabricating success.
 
 Live roles use `google/gemini-3.8-flash`; semantic grading uses
-`typesafe/jev-1.13` with Gemini fallback. A run writes isolated traces, usage, and
+`google/gemini-3.8-flash`. A run writes isolated traces, usage, and
 cost records under `.deepeval/gmail/` by default. For setup, commands, coverage,
 and adapter limits, read the [Gmail benchmark guide](../../docs/evals/gmail.md).

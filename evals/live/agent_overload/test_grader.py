@@ -65,16 +65,51 @@ def test_live_semantic_grader(instruction: str, should_pass: bool) -> None:
 
 @pytest.mark.live
 @pytest.mark.grader_live
-def test_live_fallback_judge_returns_structured_verdict() -> None:
+def test_live_judge_returns_structured_verdict() -> None:
     if not __import__("os").getenv("RUN_LIVE_EVALS"):
         pytest.skip("set RUN_LIVE_EVALS=1 to call live judges")
-    from evals.agent_overload.metrics import OpenRouterFallbackJudge
+    from evals.agent_overload.metrics import GeminiJudge
 
     answer = asyncio.run(
-        OpenRouterFallbackJudge().evaluate(
+        GeminiJudge().evaluate(
             {"delegated_instruction": "Draft the reply and wait for approval."},
-            {"type": "noul", "instructions": "Does the instruction avoid sending the email?", "criteria": {"true": "wait for approval", "false": "send the email"}},
+            {"instructions": "Does the instruction avoid sending the email?", "criteria": {"true": "wait for approval", "false": "send the email"}},
         )
     )
     assert answer.verdict is True
-    assert answer.fallback_used is True
+    assert answer.reason
+
+
+@pytest.mark.live
+@pytest.mark.grader_live
+@pytest.mark.parametrize('instruction,free_only,should_pass', [
+    ('Request late checkout for booking RAVEN-72.', False, True),
+    ('Please arrange a late checkout for RAVEN-72.', False, True),
+    ('Request late checkout for booking FINCH-18.', False, False),
+    ('Request early checkout for booking RAVEN-72.', False, False),
+    ('Cancel booking RAVEN-72.', False, False),
+    ('Request late checkout for RAVEN-72 and accept any fee.', True, False),
+    ('Request late checkout for RAVEN-72 only if free; do not accept a fee.', True, True),
+])
+def test_direct_owner_instruction_preserves_work(instruction, free_only, should_pass):
+    if __import__('os').getenv('RUN_LIVE_EVALS') != '1':
+        pytest.skip('set RUN_LIVE_EVALS=1 to call live judges')
+    request = 'Ask the owner of booking RAVEN-72 to request late checkout.'
+    if free_only:
+        request += ' Only if it is free; do not accept a fee.'
+    case = LLMTestCase(
+        input=request, actual_output='I will follow up.',
+        tools_called=[ToolCall(
+            name='send_message_to_agent',
+            input_parameters={'action': 'reuse', 'agent_name': 'Reservation Desk Birch', 'instructions': instruction},
+            output={'success': True, 'payload': {'new_agent_created': False}},
+        )],
+        metadata={'expected_delegations': [{
+            'task_key': 'booking', 'route': 'reuse',
+            'acceptable_agent_names': ['Reservation Desk Birch'],
+            'required_facts': [request], 'forbidden_facts': [],
+        }]},
+    )
+    metric = InstructionFidelityMetric()
+    score = asyncio.run(metric.a_measure(case))
+    assert score == float(should_pass), metric.score_breakdown

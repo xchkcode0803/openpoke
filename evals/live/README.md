@@ -10,5 +10,5 @@ Use `RUN_LIVE_EVALS=1 python -m evals.agent_gmail.run --suite development` for t
 28-scenario Gmail development suite. Use
 `RUN_LIVE_EVALS=1 python -m pytest evals/live/agent_overload/test_routing.py -m standard`
 for the 29-case, 32-turn routing suite. Both use `google/gemini-3.8-flash`; semantic
-grading uses Jev with Gemini fallback. Capacity checks are separate in
+grading uses Gemini. Capacity checks are separate in
 `tests/capacity/` and require `RUN_CAPACITY_EVALS=1`.

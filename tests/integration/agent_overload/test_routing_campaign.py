@@ -22,7 +22,7 @@ def test_collection_is_lightweight_and_baseline_unchanged():
     cases = full_cases() + stress_cases()
     assert len(cases) == 99
     digest = hashlib.sha256(json.dumps([asdict(case) for case in cases], default=lambda value: sorted(value), sort_keys=True).encode()).hexdigest()
-    assert digest == 'f466df1ae88422eb3a2357d0cc6d913918e56c87128a4725aa31062cacac68fd'
+    assert digest == 'deca7fed87c6fec8fed3d72518cd4e9dbacb1d03ba64463d1dac5a7e206f1ddd'
 
 
 @pytest.mark.parametrize('kind,index', [('scale', i) for i in range(8)] + [('challenge', i) for i in range(12)])

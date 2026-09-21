@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -24,13 +25,21 @@ class PendingExecution:
 
 
 @dataclass
+class _CompletedExecution:
+    """Keep the assignment beside its result for sufficiency checks."""
+
+    instructions: str
+    result: ExecutionResult
+
+
+@dataclass
 class _BatchState:
     """Collect results for a single interaction-agent turn."""
 
     batch_id: str
     created_at: datetime = field(default_factory=datetime.now)
     pending: int = 0
-    results: List[ExecutionResult] = field(default_factory=list)
+    results: List[_CompletedExecution] = field(default_factory=list)
 
 
 class ExecutionBatchManager:
@@ -49,6 +58,7 @@ class ExecutionBatchManager:
         agent_name: str,
         instructions: str,
         request_id: Optional[str] = None,
+        source_context: Optional[str] = None,
     ) -> ExecutionResult:
         """Execute an agent asynchronously and buffer the result for batch dispatch."""
 
@@ -61,7 +71,7 @@ class ExecutionBatchManager:
             logger.info(f"[{agent_name}] Execution started")
             runtime = ExecutionAgentRuntime(agent_name=agent_name)
             result = await asyncio.wait_for(
-                runtime.execute(instructions),
+                runtime.execute(instructions, source_context=source_context),
                 timeout=self.timeout_seconds,
             )
             status = "SUCCESS" if result.success else "FAILED"
@@ -85,7 +95,7 @@ class ExecutionBatchManager:
         finally:
             self._pending.pop(request_id, None)
 
-        await self._complete_execution(batch_id, result, agent_name)
+        await self._complete_execution(batch_id, result, agent_name, instructions)
         return result
 
     # Add execution request to current batch or create new batch if none exists
@@ -120,6 +130,7 @@ class ExecutionBatchManager:
         batch_id: str,
         result: ExecutionResult,
         agent_name: str,
+        instructions: str,
     ) -> None:
         """Record the execution result and dispatch when the batch drains."""
 
@@ -131,12 +142,12 @@ class ExecutionBatchManager:
                 logger.warning(f"[{agent_name}] Dropping result for unknown batch")
                 return
 
-            state.results.append(result)
+            state.results.append(_CompletedExecution(instructions=instructions, result=result))
             state.pending -= 1
 
             if state.pending == 0:
                 dispatch_payload = self._format_batch_payload(state.results)
-                agent_names = [entry.agent_name for entry in state.results]
+                agent_names = [entry.result.agent_name for entry in state.results]
                 logger.info(f"Execution batch completed: {', '.join(agent_names)}")
                 self._batch_state = None
 
@@ -167,15 +178,25 @@ class ExecutionBatchManager:
             self._batch_state = None
 
     # Format multiple execution results into single message for interaction agent
-    def _format_batch_payload(self, results: List[ExecutionResult]) -> str:
-        """Render execution results into the interaction-agent format."""
+    def _format_batch_payload(self, results: List[_CompletedExecution]) -> str:
+        """Render assignment and result separately for the interaction agent."""
 
-        entries: List[str] = []
-        for result in results:
-            status = "SUCCESS" if result.success else "FAILED"
-            response_text = (result.response or "(no response provided)").strip()
-            entries.append(f"[{status}] {result.agent_name}: {response_text}")
-        return "\n".join(entries)
+        entries = [
+            {
+                "agent_name": completed.result.agent_name,
+                "execution_status": (
+                    "execution_succeeded" if completed.result.success else "execution_failed"
+                ),
+                "original_assignment": completed.instructions,
+                "result": (
+                    completed.result.response or "(no response provided)"
+                ).strip(),
+            }
+            for completed in results
+        ]
+        encoded = json.dumps(entries, ensure_ascii=False)
+        encoded = encoded.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+        return "<execution_results>\n" + encoded + "\n</execution_results>"
 
     # Forward combined execution results to interaction agent for user response generation
     async def _dispatch_to_interaction_agent(self, payload: str) -> None:

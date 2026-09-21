@@ -11,6 +11,6 @@ collections. Capacity checks remain opt-in and local; do not include the
 one-million-agent variants in routine verification.
 
 Live inference uses `google/gemini-3.8-flash`. Semantic grading uses
-`typesafe/jev-1.13` with Gemini fallback. Run artifacts keep traces, usage, and
+`google/gemini-3.8-flash`. Run artifacts keep traces, usage, and
 costs locally. Read the [routing guide](../../docs/evals/routing.md) for commands
 and the [evaluation suite README](../README.md) for the test layout.
