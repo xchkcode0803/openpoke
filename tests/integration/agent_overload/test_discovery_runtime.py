@@ -6,7 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from evals.agent_overload.harness import _reset_services, _StubBatchManager
+from evals.agent_overload.harness import _StubBatchManager
+from evals.shared.state import create_stores
 
 
 def call(name, **arguments):
@@ -21,7 +22,7 @@ def runtime_env(tmp_path, monkeypatch):
     import server.agents.interaction_agent.runtime as runtime_module
     import server.agents.interaction_agent.tools as tools
 
-    roster, conversation, memory, logs = _reset_services(tmp_path)
+    roster, conversation, memory, logs = create_stores(tmp_path)
     workers = _StubBatchManager()
     for module in (prompts, tools):
         monkeypatch.setattr(module, "get_agent_roster", lambda: roster)

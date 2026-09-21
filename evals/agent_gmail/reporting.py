@@ -58,21 +58,3 @@ def summarize(records):
             "reporting_failures": sum(not a["verdict"] and a.get("category") == "reporting" for r in records for a in r.get("semantic", {}).get("answers", [])),
             "latency_median": statistics.median(latencies) if latencies else None,
             "latency_p95": latencies[min(len(latencies) - 1, int(len(latencies) * .95))] if latencies else None}
-
-
-def compare(left, right):
-    def index(path):
-        manifest = json.loads((Path(path) / "manifest.json").read_text())
-        records = {p.stem: json.loads(p.read_text()) for p in Path(path).glob("case-*.json")}
-        return manifest, records
-    lm, lr = index(left)
-    rm, rr = index(right)
-    for key in ("fixture_hash", "grader_version", "grader_hash", "prompt_hashes", "tool_schema_hashes", "adapter_hash", "harness_hash", "emulator_hash", "emulate_launcher_hash", "dependency_lock_hash", "emulate_version"):
-        if lm.get(key) != rm.get(key):
-            raise ValueError(f"Cannot pair different {key}")
-    common = sorted(lr.keys() & rr.keys())
-    regressions = [k for k in common if lr[k]["outcome"] == "pass" and rr[k]["outcome"] == "agent_failure"]
-    improvements = [k for k in common if lr[k]["outcome"] == "agent_failure" and rr[k]["outcome"] == "pass"]
-    return {"baseline_config": lm.get("config"), "candidate_config": rm.get("config"), "matched": len(common), "regressions": regressions, "improvements": improvements, "unmatched_left": sorted(lr.keys() - rr.keys()), "unmatched_right": sorted(rr.keys() - lr.keys()),
-            "pairs": [{"case": k, "baseline": lr[k]["outcome"], "candidate": rr[k]["outcome"]} for k in common],
-            "baseline": summarize([lr[k] for k in common]), "candidate": summarize([rr[k] for k in common])}

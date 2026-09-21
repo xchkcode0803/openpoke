@@ -16,8 +16,6 @@ from ...data_paths import resolve_data_dir
 from ...utils.timezones import now_in_user_timezone
 
 
-_DATA_DIR = resolve_data_dir(Path(__file__).resolve().parent.parent.parent / "data")
-_EXECUTION_LOG_DIR = _DATA_DIR / "execution_agents"
 
 
 def _encode_payload(payload: str) -> str:
@@ -55,11 +53,10 @@ class ExecutionAgentLogStore:
 
     def _lock_for(self, agent_name: str) -> threading.Lock:
         """Get or create a lock for an agent."""
-        slug = agent_name
         with self._global_lock:
-            if slug not in self._locks:
-                self._locks[slug] = threading.RLock()
-            return self._locks[slug]
+            if agent_name not in self._locks:
+                self._locks[agent_name] = threading.RLock()
+            return self._locks[agent_name]
 
     def _log_path(self, agent_name: str) -> Path:
         journal = self.catalog.register_journal(agent_name)

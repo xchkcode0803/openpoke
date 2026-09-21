@@ -18,6 +18,8 @@ from deepeval.test_case import LLMTestCase, ToolCall
 from deepeval.tracing import observe, trace, update_current_span, update_current_trace
 
 from .cases import ExpectedDelegation, RoutingCase
+from evals.shared.state import create_stores
+from evals.shared.usage import effective_cost
 from .provider import MODEL, context_limits, failure_kind
 
 
@@ -41,7 +43,7 @@ def _usage(response: dict[str, Any]) -> tuple[int | None, int | None, float | No
     usage = response.get("usage") or {}
     input_tokens = usage.get("prompt_tokens") or usage.get("input_tokens")
     output_tokens = usage.get("completion_tokens") or usage.get("output_tokens")
-    cost = usage.get("cost") or response.get("cost")
+    cost = effective_cost(usage) if "cost" in usage else response.get("cost")
     return (
         int(input_tokens) if isinstance(input_tokens, (int, float)) else None,
         int(output_tokens) if isinstance(output_tokens, (int, float)) else None,
@@ -59,6 +61,7 @@ class _TracingInteractionRuntime:
         self.output_tokens = 0
         self.cost = 0.0
         self.has_cost = False
+        self.all_costs_known = True
         self.model_latency = 0.0
         self.prompt_estimates = []
         self.model_calls = []
@@ -88,6 +91,7 @@ class _TracingInteractionRuntime:
             input_tokens, output_tokens, cost = _usage(response)
             self.input_tokens += input_tokens or 0
             self.output_tokens += output_tokens or 0
+            self.all_costs_known = self.all_costs_known and cost is not None
             if cost is not None:
                 self.cost += cost
                 self.has_cost = True
@@ -161,26 +165,6 @@ def _expected_metadata(
     }
 
 
-def _reset_services(root: Path) -> tuple[Any, Any, Any, Any]:
-    from server.services.conversation.log import ConversationLog
-    from server.services.conversation.summarization.working_memory_log import WorkingMemoryLog
-    from server.services.execution.log_store import ExecutionAgentLogStore
-    from server.services.execution.roster import AgentRoster
-
-    working_memory = WorkingMemoryLog(root / "conversation" / "working_memory.log")
-    conversation = ConversationLog(root / "conversation" / "conversation.log")
-    conversation._working_memory_log = working_memory
-    conversation._notify_summarization = lambda: None
-    execution_logs = ExecutionAgentLogStore(root / "execution_agents")
-    execution_logs.clear_all()
-    return (
-        AgentRoster(root / "execution_agents" / "roster.json"),
-        conversation,
-        working_memory,
-        execution_logs,
-    )
-
-
 def _seed_case(case: RoutingCase, roster: Any, conversation: Any, working_memory: Any) -> None:
     roster.clear()
     # One transaction builds roster membership and its FTS index.
@@ -220,7 +204,7 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
     import server.agents.interaction_agent.tools as tools_module
 
     setup_started = time.perf_counter()
-    roster, conversation, working_memory, execution_logs = _reset_services(root)
+    roster, conversation, working_memory, execution_logs = create_stores(root)
     _seed_case(case, roster, conversation, working_memory)
     for name, entries in (history or {}).items():
         if name not in case.initial_agents:
@@ -233,11 +217,6 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
             else:
                 raise ValueError(f"Unsupported history tag: {tag}")
     setup_seconds = time.perf_counter() - setup_started
-    if os.getenv('EVAL_PHASE_FILE'):
-        phase_path = Path(os.environ['EVAL_PHASE_FILE'])
-        phase_temporary = phase_path.with_suffix('.tmp')
-        phase_temporary.write_text(json.dumps({'phase': 'routing', 'started': time.monotonic()}))
-        phase_temporary.replace(phase_path)
     settings = SimpleNamespace(
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
         interaction_agent_model=MODEL,
@@ -271,6 +250,7 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
                 runtime.output_tokens = 0
                 runtime.cost = 0.0
                 runtime.has_cost = False
+                runtime.all_costs_known = True
                 runtime.model_latency = 0.0
                 started = time.perf_counter()
                 runtime.prompt_estimates = []
@@ -324,7 +304,7 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
                     "discovery_call_count": runtime._runtime.discovery_calls,
                     "discovery_closed_reason": runtime._runtime.discovery_closed_reason,
                     "provider_timing": [call["response"].get("_eval_timing", {}) for call in runtime.model_calls],
-                    "model_call_seconds_including_pacing": runtime.model_latency,
+                    "model_call_seconds": runtime.model_latency,
                     "conversation_context": case.initial_conversation,
                 }
                 if runtime.model_calls:
@@ -344,7 +324,7 @@ async def _run_isolated_case(case: RoutingCase, root: Path, history=None) -> lis
                     input=turn.message,
                     actual_output=result.response,
                     tools_called=list(runtime.tool_calls),
-                    token_cost=runtime.cost if runtime.has_cost else None,
+                    token_cost=runtime.cost if runtime.has_cost and runtime.all_costs_known else None,
                     input_token_count=runtime.input_tokens or None,
                     output_token_count=runtime.output_tokens or None,
                     completion_time=elapsed,
@@ -374,7 +354,7 @@ def evaluate_live_case(case, history=None) -> None:
         results = asyncio.run(run_case(case, history))
     failures = []
     for result in results:
-        if result.metadata.get("failure_kind") in {"provider", "capacity", "harness", "budget"}:
+        if result.metadata.get("failure_kind") in {"provider", "capacity", "harness"}:
             save_result("unavailable.jsonl", result.model_dump(mode="json"))
             failures.append(f"{result.name}: unavailable ({result.metadata['failure_kind']})")
             continue
@@ -390,7 +370,8 @@ def evaluate_live_case(case, history=None) -> None:
         finally:
             save_result("turns.jsonl", {"result": result.model_dump(mode="json"), "metrics": [
                 {"name": metric.__name__, "score": getattr(metric, "score", None),
-                 "reason": getattr(metric, "reason", None)} for metric in metrics
+                 "reason": getattr(metric, "reason", None),
+                 "details": getattr(metric, "score_breakdown", {})} for metric in metrics
             ]})
     assert not failures, "\n".join(failures)
 

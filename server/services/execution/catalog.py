@@ -16,6 +16,11 @@ def legacy_slug(name):
     return re.sub('-+', '-', ''.join(c.lower() if c.isalnum() else '-' for c in name.strip()).strip('-')) or 'agent'
 
 
+def journal_filename(name):
+    """Stable journal path without legacy slug collisions."""
+    return "agent-" + hashlib.sha256(name.encode()).hexdigest() + ".log"
+
+
 class Catalog:
     def __init__(self, directory):
         self.directory = Path(directory)
@@ -101,7 +106,8 @@ class Catalog:
         def rows():
             for name in names:
                 normalized = normalize(name)
-                yield name, normalized, legacy_slug(name), len(normalized.split()), 'agent-' + hashlib.sha256(name.encode()).hexdigest() + '.log'
+                yield (name, normalized, legacy_slug(name),
+                       len(normalized.split()), journal_filename(name))
         db.executemany('INSERT INTO agents(name,normalized,slug,words,journal_key) VALUES(?,?,?,?,?)', rows())
 
     def count(self):
@@ -153,7 +159,7 @@ class Catalog:
             return [row[0] for row in db.execute('SELECT name FROM agents ORDER BY id LIMIT ?', (-1 if limit is None else limit,))]
 
     def register_journal(self, name):
-        filename = 'agent-' + hashlib.sha256(name.encode()).hexdigest() + '.log'
+        filename = journal_filename(name)
         with self.connect() as db:
             db.execute('INSERT OR IGNORE INTO journals(name,path) VALUES(?,?)', (name, filename))
             return dict(db.execute('SELECT * FROM journals WHERE name=?', (name,)).fetchone())
@@ -169,7 +175,7 @@ class Catalog:
                     db.execute('INSERT OR IGNORE INTO journals(name,path,dirty) VALUES(?,?,1)', (owners[0][0], path.name))
                 elif owners:
                     for owner in owners:
-                        filename = 'agent-' + hashlib.sha256(owner[0].encode()).hexdigest() + '.log'
+                        filename = journal_filename(owner[0])
                         db.execute('INSERT OR IGNORE INTO journals(name,path,ambiguous) VALUES(?,?,1)', (owner[0], filename))
             db.execute("INSERT INTO metadata VALUES('logs_bootstrapped','1')")
 

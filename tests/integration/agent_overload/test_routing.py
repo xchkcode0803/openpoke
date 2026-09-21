@@ -53,6 +53,30 @@ def test_harness_runs_real_reuse_path(monkeypatch: pytest.MonkeyPatch) -> None:
     assert results[0].metadata["model_calls"][0]["system"]
 
 
+def test_turn_cost_is_unknown_when_any_model_response_omits_cost(monkeypatch: pytest.MonkeyPatch) -> None:
+    import server.agents.interaction_agent.runtime as runtime_module
+
+    calls = 0
+
+    async def completion(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            message = {"content": "", "tool_calls": [_tool_call("ack", "send_message_to_user", {"message": "I will look into that."})]}
+            return {"choices": [{"message": message}], "usage": {"prompt_tokens": 10, "completion_tokens": 1, "cost": 0.01}}
+        if calls == 2:
+            message = {"content": "", "tool_calls": [_tool_call("route", "send_message_to_agent", {"agent_name": "Montreal Hotel Search", "instructions": "Find more Montreal hotels."})]}
+            return {"choices": [{"message": message}], "usage": {"prompt_tokens": 10, "completion_tokens": 1}}
+        return {"choices": [{"message": {"content": "I will update you when I have more options."}}], "usage": {"prompt_tokens": 10, "completion_tokens": 1, "cost": 0}}
+
+    monkeypatch.setattr(runtime_module, "request_chat_completion", completion)
+    case = next(item for item in DEVELOPMENT_CASES if item.name == "reuses_existing_hotel_search_agent")
+    result = asyncio.run(run_case(case))[0]
+    assert result.token_cost is None
+    assert result.input_token_count == 30
+    assert result.output_token_count == 3
+
+
 def test_environment_and_temporary_state_restored(monkeypatch):
     from pathlib import Path
     import server.agents.interaction_agent.runtime as runtime_module
@@ -108,9 +132,9 @@ def test_similar_density_variant_is_fixed_size_and_realistic() -> None:
 
 
 def test_harness_uses_evaluation_data_directory(tmp_path) -> None:
-    from evals.agent_overload.harness import _reset_services
+    from evals.shared.state import create_stores
 
-    roster, conversation, working_memory, execution_logs = _reset_services(tmp_path)
+    roster, conversation, working_memory, execution_logs = create_stores(tmp_path)
     assert roster._roster_path.is_relative_to(tmp_path)
     assert conversation._path.is_relative_to(tmp_path)
     assert working_memory._path.is_relative_to(tmp_path)

@@ -1,5 +1,4 @@
 import asyncio
-import os
 import httpx
 import pytest
 from evals.agent_gmail.config import EvalConfig, DEFAULT_MODEL
@@ -29,15 +28,13 @@ def test_transport_retains_usage_without_recording_credentials(monkeypatch):
     assert "test-secret" not in str(provider.calls)
 
 
-def test_cancelled_inflight_usage_stops_budgeted_followups(monkeypatch):
-    from evals.agent_gmail.provider import BudgetExceeded
+def test_cancelled_request_marks_usage_unknown(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-only")
     async def cancelled(*args, **kwargs):
         raise asyncio.CancelledError()
     monkeypatch.setattr(httpx.AsyncClient, "post", cancelled)
-    provider = Provider(EvalConfig(budget=1))
+    provider = Provider(EvalConfig())
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(provider(role="execution", model=DEFAULT_MODEL, messages=[]))
     assert provider.calls[0]["cancelled"]
-    with pytest.raises(BudgetExceeded):
-        provider.check_budget()
+    assert provider.cost_unknown is True

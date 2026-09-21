@@ -7,8 +7,7 @@ benchmark intentionally isolates a narrower concern.
 | Path | Purpose |
 |---|---|
 | `agent_gmail/` | Gmail fixtures, Vercel Emulate adapter, orchestration, grading, and runner. |
-| `agent_overload/` | Routing fixtures, candidate discovery, grading, and campaign support. |
-| `model_comparison/` | Candidate selection, recovery, cost accounting, and comparison reporting. |
+| `agent_overload/` | Routing fixtures, candidate discovery, grading, and scale support. |
 | `live/` | Explicitly invoked paid pytest collections for Gmail and routing. |
 | `shared/` | Small utilities shared by benchmark packages. |
 
@@ -31,17 +30,19 @@ npm ci --prefix evals/agent_gmail/emulate
 Run ordinary engineering checks without provider calls:
 
 ```bash
-OPENROUTER_API_KEY=offline-placeholder python -m pytest -q
+OPENROUTER_API_KEY=offline-placeholder python -m pytest tests/unit tests/integration -q
 ```
 
 Paid collections are never included in that command. Invoke them explicitly:
 
 ```bash
-RUN_LIVE_EVALS=1 python -m pytest evals/live/agent_gmail -m live
-RUN_LIVE_EVALS=1 python -m pytest evals/live/agent_overload -m full
-RUN_CAPACITY_EVALS=1 python -m pytest tests/capacity -m routing_capacity
+RUN_LIVE_EVALS=1 python -m evals.agent_gmail.run --suite development
+RUN_LIVE_EVALS=1 python -m pytest evals/live/agent_overload/test_routing.py -m standard
+RUN_CAPACITY_EVALS=1 python -m pytest tests/capacity/agent_overload/test_routing_scale.py -m routing_capacity
+RUN_INDEX_CAPACITY=1 python -m pytest tests/capacity/agent_overload/test_indexed_performance.py -m indexed_capacity
 ```
 
-For a named Sonnet or Gemini comparison, use
-`python -m evals.model_comparison.run --help`. Read the [documentation index](../docs/README.md)
-for benchmark design, results, and limitations.
+Production and live inference use `google/gemini-3.8-flash`. Semantic graders use
+`typesafe/jev-1.13` with Gemini fallback. Live runs retain their own local traces,
+usage, and cost records; do not commit them. Read the [documentation index](../docs/README.md)
+for benchmark design and limits.

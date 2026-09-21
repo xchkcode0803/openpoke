@@ -41,8 +41,6 @@ class AgentRoster:
             db.execute("UPDATE metadata SET value='0' WHERE key='count'")
 
 
-_DATA_DIR = resolve_data_dir(Path(__file__).resolve().parent.parent.parent / 'data')
-_ROSTER_PATH = _DATA_DIR / 'execution_agents' / 'roster.json'
 _agent_roster = None
 
 

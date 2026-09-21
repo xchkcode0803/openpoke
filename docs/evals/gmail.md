@@ -34,20 +34,24 @@ The adapter supports message search and retrieval, drafts, sends, replies,
 forwards, MIME, recipients, and thread linkage. Contact lookup and uploaded
 attachments are outside coverage and return explicit unsupported errors.
 
-## Calibration qualifications
+## Models and artifacts
 
-The pinned emulator requires valid raw MIME for structured seeds; independent
-readback verifies seeded content. Adapter normalization handles Gmail's unpadded
-base64 and RFC dates without changing production parsing. The launcher waits for an
-authenticated local read after Emulate binds its OS-assigned loopback port.
+Live Gmail roles use `google/gemini-3.8-flash`. Flexible checks use
+`typesafe/jev-1.13`, with `google/gemini-3.8-flash` as the fallback. The runner
+records each model request, tool event, mailbox readback, judge decision, provider
+usage, and cost in a fresh local artifact directory under `.deepeval/gmail/` unless
+`--output` selects another location. Artifacts are not committed.
 
-Fixture and grader corrections were made before the authoritative full scores:
-quoted exact-text boundaries replaced ambiguous wording; project-status claims now
-require supporting evidence; reporting accepts truthful mixed success and failure
-claims; and judge input removes duplicate read snapshots while retaining queries,
-mutations, errors, source messages, and final state. The original agent traces and
-earlier outcomes remain in local artifacts. The current report records audit
-qualifications that still apply to frozen scores.
+Each scenario receives isolated application storage and a disposable mailbox. A
+turn has a 180-second deadline and each worker has a 90-second deadline. Provider
+requests have a 60-second timeout. Only HTTP 429 responses are retried, with at
+most three retries (four attempts total) and only the server's `Retry-After`
+delay. There is no fixed pacing delay.
+
+The pinned emulator requires valid raw MIME for structured seeds. Independent
+readback verifies seeded content, and adapter normalization supports Gmail's
+unpadded base64 and RFC dates without changing production parsing. The launcher
+waits for an authenticated local read after Emulate binds its loopback port.
 
 ## Running it
 
@@ -67,12 +71,8 @@ The placeholder does not make provider requests. Paid runs require an explicit
 opt-in and run sequentially:
 
 ```bash
-RUN_LIVE_EVALS=1 python -m evals.agent_gmail.run --suite smoke
 RUN_LIVE_EVALS=1 python -m evals.agent_gmail.run --suite development
-RUN_LIVE_EVALS=1 python -m evals.agent_gmail.run --suite full
 ```
 
-The standalone Gmail runner keeps Sonnet 4 as its baseline candidate. Use the
-[comparison runner](../../evals/model_comparison/README.md) to run a named
-candidate with its reproducible pacing profile. See the [current model comparison
-report](reports/agent_eval_report.md) for the authoritative measured results.
+The development suite has 28 scenarios. Each run is isolated and writes its own
+trace, usage, and cost records; inspect that directory when comparing runs.

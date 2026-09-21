@@ -1,14 +1,13 @@
-"""Offline contract checks for fixtures, supervision, isolation, and spending."""
+"""Offline contract checks for fixtures, supervision, and isolation."""
 import asyncio
 import json
 import sys
 from dataclasses import asdict
 import hashlib
+from pathlib import Path
 
-import httpx
 import pytest
 
-from evals.agent_overload.campaign_budget import BudgetStopped, CampaignBudget
 from evals.agent_overload.challenge_cases import challenges
 from evals.agent_overload.routing_campaign import prepare, supervise
 from evals.agent_overload.routing_population import CHALLENGE_VARIANTS, SCALE_VARIANTS, Variant, materialize
@@ -101,199 +100,44 @@ def test_hidden_history_not_in_assignment_profiles(tmp_path, monkeypatch):
             assert profiles['Housing Desk Elm']['initial_assignment'] == profiles['Housing Desk Ash']['initial_assignment']
 
 
-def test_watchdog_timeout_and_memory(tmp_path):
+def test_watchdog_timeout_and_memory(tmp_path, monkeypatch):
+    from evals.agent_overload import routing_campaign
+
+    monkeypatch.setattr(routing_campaign, '_memory_bytes', lambda _pid: 0)
     timeout = supervise([sys.executable, '-c', 'import time; time.sleep(5)'], tmp_path / 'timeout', seconds=.05)
     assert timeout['resource_failure'] == 'wall_clock_limit'
+    monkeypatch.setattr(routing_campaign, '_memory_bytes', lambda _pid: 2)
     memory = supervise([sys.executable, '-c', 'import time; time.sleep(5)'], tmp_path / 'memory', memory_limit=1)
     assert memory['resource_failure'] == 'memory_limit'
     assert (tmp_path / 'memory' / 'process.json').exists()
 
 
-def ledger(tmp_path, cap=10):
-    (tmp_path / 'prices.json').write_text(json.dumps({'test': {'prompt': .000003, 'completion': .000015, 'max_completion_tokens': 1000, 'context_length': 32000}}))
-    return CampaignBudget(tmp_path, cap)
-
-
-def response(cost):
-    return httpx.Response(200, json={'usage': {'cost': cost, 'prompt_tokens': 10, 'completion_tokens': 3}})
-
-
-def test_budget_persists_and_charges_once(tmp_path):
-    budget = ledger(tmp_path)
-    identifier = budget.reserve({'model': 'test', 'messages': []})
-    budget.settle(identifier, response(.01))
-    other = CampaignBudget(tmp_path)
-    with other.ledger() as state:
-        assert len(state['requests']) == 1
-        assert float(state['requests'][0]['charged']) == .01
-
-
-def test_budget_reservation_limit_and_missing_prices(tmp_path):
-    budget = ledger(tmp_path, .001)
-    with pytest.raises(BudgetStopped, match='Budget limit'):
-        budget.reserve({'model': 'test'})
-    with pytest.raises(BudgetStopped, match='Pricing unavailable'):
-        budget.reserve({'model': 'unknown'})
-
-
-def test_budget_unknown_usage_and_interrupted_request_stop(tmp_path):
-    budget = ledger(tmp_path)
-    identifier = budget.reserve({'model': 'test'})
-    with pytest.raises(BudgetStopped, match='Unsettled'):
-        budget.reserve({'model': 'test'})
-    with pytest.raises(BudgetStopped):
-        budget.settle(identifier, httpx.Response(200, json={}))
-    with pytest.raises(BudgetStopped):
-        CampaignBudget(tmp_path).reserve({'model': 'test'})
-
-
-def test_rate_limit_releases_reservation_and_retry_reserves_again(tmp_path):
-    budget = ledger(tmp_path)
-    first = budget.reserve({'model': 'test'})
-    budget.settle(first, httpx.Response(429))
-    second = budget.reserve({'model': 'test'})
-    budget.settle(second, response(0))
-    with budget.ledger() as state:
-        assert len(state['requests']) == 2
-        assert all(float(row['charged']) == 0 for row in state['requests'])
-
-
-def test_decision_questions_share_one_request_charge(tmp_path):
-    budget = ledger(tmp_path)
-    identifier = budget.reserve({'model': 'test', 'questions': {'a': {}, 'b': {}}})
-    budget.settle(identifier, response(.001))
-    with budget.ledger() as state:
-        assert len(state['requests']) == 1
-        assert float(state['requests'][0]['charged']) == .001
-
-
-def test_budget_paces_across_restarts_and_rejects_double_settlement(tmp_path):
-    budget = ledger(tmp_path)
-    first = budget.reserve({'model': 'test'})
-    budget.settle(first, response(.001))
-    restarted = CampaignBudget(tmp_path)
-    second = restarted.reserve({'model': 'test'})
-    assert 0 < restarted.delay(second) <= 4.1
-    with pytest.raises(BudgetStopped, match='already settled'):
-        restarted.settle(first, response(.001))
-    restarted.settle(second, response(.001))
-
-
-def test_provider_budget_checked_before_every_attempt(tmp_path, monkeypatch):
-    from evals.agent_overload import provider
-    budget = ledger(tmp_path)
-    calls = []
-
-    async def post(*args, **kwargs):
-        calls.append(kwargs)
-        return httpx.Response(429) if len(calls) == 1 else response(.001)
-
-    async def sleep(*args):
-        pass
-
-    monkeypatch.setattr(provider, 'request_budget', budget)
-    monkeypatch.setattr(provider, '_post', post)
-    monkeypatch.setattr(provider.asyncio, 'sleep', sleep)
-    asyncio.run(provider.paced_post(None, 'https://openrouter.ai/api/v1/chat/completions', json={'model': 'test'}))
-    with budget.ledger() as state:
-        assert [row['status'] for row in state['requests']] == ['rate_limited', 'settled']
-
-
-def test_campaign_sources_cannot_mix(tmp_path):
-    from evals.agent_overload.routing_campaign import ensure_manifest
-    ensure_manifest(tmp_path)
-    ensure_manifest(tmp_path)
-    path = tmp_path / 'source_manifest.json'
-    saved = json.loads(path.read_text())
-    saved['routing_population.py'] = 'another fixture version'
-    path.write_text(json.dumps(saved))
-    with pytest.raises(ValueError, match='do not mix'):
-        ensure_manifest(tmp_path)
-
-
-def test_outcomes_are_separate_and_resume_without_rerunning(tmp_path, monkeypatch):
+@pytest.mark.parametrize('raises', [False, True])
+def test_run_variant_removes_supervised_temporary_state(tmp_path, monkeypatch, raises):
     from evals.agent_overload import routing_campaign
-    monkeypatch.setenv('EVAL_CAMPAIGN_DIR', str(tmp_path))
-    calls = []
 
-    def child(command, destination):
-        calls.append(destination)
-        routing_campaign.write_json(destination / 'outcome.json', {'status': 'completed'})
-        return {'resource_failure': None}
-
-    monkeypatch.setattr(routing_campaign, 'supervise', child)
-    first, second = Variant('scale', 0, 10), Variant('scale', 1, 10)
-    routing_campaign.run_variant(first, 'capacity')
-    routing_campaign.run_variant(first, 'capacity')
-    routing_campaign.run_variant(second, 'capacity')
-    assert len(calls) == 2 and calls[0] != calls[1]
-
-
-def test_transport_error_is_provider_failure_and_keeps_reservation(tmp_path, monkeypatch):
-    from evals.agent_overload import provider
-    budget = ledger(tmp_path)
-
-    async def timeout(*args, **kwargs):
-        raise httpx.ReadTimeout('timed out')
-
-    async def sleep(*args):
-        pass
-
-    monkeypatch.setattr(provider, 'request_budget', budget)
-    monkeypatch.setattr(provider, '_post', timeout)
-    monkeypatch.setattr(provider.asyncio, 'sleep', sleep)
-    with pytest.raises(RuntimeError, match='OpenRouter transport') as error:
-        asyncio.run(provider.interaction_completion(model='test', messages=[]))
-    assert provider.failure_kind(str(error.value)) == 'provider'
-    with budget.ledger() as state:
-        assert state['requests'][0]['status'] == 'reserved'
-    with pytest.raises(BudgetStopped, match='Unsettled'):
-        budget.reserve({'model': 'test'})
-
-
-@pytest.mark.parametrize('fails', [False, True])
-def test_live_child_reuses_preflight_and_restores_scope(tmp_path, monkeypatch, fails):
-    import os
-    from evals.agent_overload import routing_campaign, harness, provider
-    from evals.agent_overload.routing_population import materialize
-    variant = Variant('scale', 0, 10)
-    _, _, manifest = materialize(variant)
-    monkeypatch.setenv('EVAL_CAMPAIGN_DIR', str(tmp_path))
-    routing_campaign.write_json(tmp_path / 'capacity' / variant.key / 'fixture.json', manifest)
-    routing_campaign.write_json(tmp_path / 'prices.json', {provider.MODEL: {'context_length': 200000}})
-    original_dir, original_budget = provider._artifact_dir, provider.request_budget
-    original_environment = os.environ.get('OPENPOKE_DATA_DIR')
+    monkeypatch.setenv('EVAL_ARTIFACT_DIR', str(tmp_path / 'artifacts'))
     directories = []
 
-    def evaluate(case, history):
-        directories.append(os.environ['OPENPOKE_DATA_DIR'])
-        assert provider.request_budget is not None
-        if fails:
-            raise RuntimeError('scripted harness failure')
+    def stopped(command, destination, **kwargs):
+        directory = Path(command[-1])
+        directories.append(directory)
+        sqlite = directory / 'execution_agents' / 'agents.sqlite3'
+        sqlite.parent.mkdir(parents=True)
+        sqlite.write_text('temporary state')
+        if raises:
+            raise RuntimeError('supervisor failed')
+        return {'resource_failure': 'wall_clock_limit', 'returncode': -15}
 
-    monkeypatch.setattr(harness, 'evaluate_live_case', evaluate)
-    monkeypatch.setattr(routing_campaign, 'prepare', lambda *args: pytest.fail('Repeated preflight'))
-    if fails:
-        with pytest.raises(RuntimeError, match='scripted harness failure'):
-            routing_campaign.child(variant, 'live')
+    monkeypatch.setattr(routing_campaign, 'supervise', stopped)
+    variant = Variant('scale', 0, 10)
+    if raises:
+        with pytest.raises(RuntimeError, match='supervisor failed'):
+            routing_campaign.run_variant(variant, 'capacity')
     else:
-        routing_campaign.child(variant, 'live')
-    from pathlib import Path
-    assert directories and all(not Path(directory).exists() for directory in directories)
-    assert provider._artifact_dir is original_dir and provider.request_budget is original_budget
-    assert os.environ.get('OPENPOKE_DATA_DIR') == original_environment
-
-
-def test_unexpected_charge_is_recorded_and_stops_campaign(tmp_path):
-    budget = ledger(tmp_path)
-    identifier = budget.reserve({'model': 'test'})
-    with pytest.raises(BudgetStopped, match='exceeded'):
-        budget.settle(identifier, response(1))
-    with budget.ledger() as state:
-        assert state['requests'][0]['charged'] == '1'
-        assert state['requests'][0]['status'] == 'over_reservation'
-    with pytest.raises(BudgetStopped, match='exceeded'):
-        budget.reserve({'model': 'test'})
+        result = routing_campaign.run_variant(variant, 'capacity')
+        assert result['status'] == 'resource_limit'
+    assert directories and all(not directory.exists() for directory in directories)
 
 
 def test_population_covers_task_families_and_naming_styles():
@@ -301,22 +145,3 @@ def test_population_covers_task_families_and_naming_styles():
     text = '\n'.join(background_name(i, 9137, 'Montreal', ('Hotel', 'Flights')) for i in range(5000)).casefold()
     assert all(family.casefold() in text for family in FAMILIES)
     assert all(pattern in text for pattern in ('ref ', 'account ', 'reservation ', 'stuff:', 'follow-up', 'records /'))
-
-
-def test_payment_rejection_stops_without_counting_generation_charge(tmp_path):
-    budget = ledger(tmp_path)
-    identifier = budget.reserve({'model':'test'})
-    with pytest.raises(BudgetStopped,match='before generation'):
-        budget.settle(identifier,httpx.Response(402,json={'error':{'code':402,'message':'Insufficient key limit'}}))
-    with budget.ledger() as state:
-        assert state['requests'][0]['status']=='payment_rejected'
-        assert state['requests'][0]['charged']=='0'
-        assert state['stopped']
-
-
-def test_user_approved_unknown_charge_still_consumes_budget(tmp_path):
-    budget = ledger(tmp_path,1)
-    with budget.ledger() as state:
-        state['requests'].append({'status':'held_unknown','charged':'0.99'})
-    with pytest.raises(BudgetStopped,match='Budget limit'):
-        budget.reserve({'model':'test'})

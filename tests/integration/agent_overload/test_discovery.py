@@ -1,6 +1,6 @@
 """Indexed discovery contracts using real SQLite and journal stores."""
 import pytest
-from server.agents.interaction_agent.discovery import search_names, select_candidates, inspect_history, ownership_profile
+from server.agents.interaction_agent.discovery import search_names, select_candidates, inspect_history
 from server.services.execution.roster import AgentRoster
 from server.services.execution.log_store import ExecutionAgentLogStore
 
@@ -60,8 +60,7 @@ def test_invalid_offsets(stores, offset):
 def test_history_sources_profiles_and_inspection(stores):
     roster, logs = stores
     roster.add_agent('Desk')
-    assert ownership_profile('Desk', logs) == {'name': 'Desk'}
-    assert ownership_profile('Missing', logs) == {'name': 'Missing'}
+    assert select_candidates(roster.catalog, 'Desk') == [{'name': 'Desk'}]
     logs.record_request('Desk', 'First assignment')
     logs.record_request('Desk', 'Find the violet booking')
     logs.record_tool_response('Desk', 'email', 'rawsecret')
@@ -73,7 +72,7 @@ def test_history_sources_profiles_and_inspection(stores):
         result = search_names(roster.catalog, query)
         assert result['agents'] == ['Desk']
         assert query.lower() in result['candidates'][0]['matching_history']['text'].lower()
-    profile = ownership_profile('Desk', logs)
+    profile = select_candidates(roster.catalog, 'Desk')[0]
     assert profile['initial_assignment'] == 'First assignment'
     assert profile['latest_assignment'] == 'Latest assignment'
     page = inspect_history(roster.catalog, 'Desk', logs)
@@ -91,7 +90,7 @@ def test_excerpt_limits(stores, length):
     row = inspect_history(roster.catalog, 'Owner', logs)['entries'][0]
     assert len(row['text']) == min(length,1000)
     assert row['truncated'] == (length > 1000)
-    assert len(ownership_profile('Owner', logs)['initial_assignment']) == 400
+    assert len(select_candidates(roster.catalog, 'Owner')[0]['initial_assignment']) == 400
 
 
 @pytest.mark.parametrize('name', ['missing', 'OWNER', '', None, [], 42])
@@ -110,7 +109,7 @@ def test_empty_history_and_pagination(stores):
     first = inspect_history(roster.catalog, 'Owner', logs)
     second = inspect_history(roster.catalog, 'Owner', logs, first['next_offset'])
     assert [r['text'] for r in first['entries']+second['entries']] == [f'Update {i}' for i in reversed(range(9))]
-    assert ownership_profile('Owner', logs) == {'name':'Owner'}
+    assert select_candidates(roster.catalog, 'Owner') == [{'name': 'Owner'}]
 
 
 def test_small_roster_complete_and_large_roster_bounded(stores):
@@ -133,4 +132,4 @@ def test_explicit_owner_and_profiles_do_not_repeat_evidence(stores):
     profile=search_names(roster.catalog,'sapphire')['candidates'][0]
     assert 'matching_history' not in profile
     logs.record_request('Task 0','Now own flights only')
-    assert ownership_profile('Task 0',logs)['latest_assignment']=='Now own flights only'
+    assert select_candidates(roster.catalog, 'Task 0')[0]['latest_assignment']=='Now own flights only'

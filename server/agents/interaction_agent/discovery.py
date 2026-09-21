@@ -7,6 +7,10 @@ SEARCH_PAGE_SIZE = 10
 SEARCH_POOL_SIZE = 100
 RECENT_HISTORY_CHAR_LIMIT = 6000
 QUERY_TERM_LIMIT = 64
+RECIPROCAL_RANK_CONSTANT = 60
+CURRENT_MESSAGE_WEIGHT = 3
+CONVERSATION_WEIGHT = 1
+EVIDENCE_CHAR_LIMIT = 400
 
 
 def _query(text):
@@ -64,7 +68,8 @@ def ranked_candidates(catalog, query, history=''):
         current_mentions = _mentions(db, query)
         past_mentions = _mentions(db, history)
         exact = {row[0] for row in db.execute('SELECT id FROM agents WHERE normalized=? ORDER BY name LIMIT 100', (normalize(query),))}
-        for text, weight in ((query, 3), (history[-RECENT_HISTORY_CHAR_LIMIT:], 1)):
+        for text, weight in ((query, CURRENT_MESSAGE_WEIGHT),
+                             (history[-RECENT_HISTORY_CHAR_LIMIT:], CONVERSATION_WEIGHT)):
             for is_history in (False, True):
                 seen = set()
                 for row in _hits(db, text, is_history):
@@ -73,11 +78,11 @@ def ranked_candidates(catalog, query, history=''):
                         continue
                     seen.add(identifier)
                     names[identifier] = (row['normalized'], row['name'])
-                    scores[identifier] = scores.get(identifier, 0) + weight / (60 + len(seen))
+                    scores[identifier] = scores.get(identifier, 0) + weight / (RECIPROCAL_RANK_CONSTANT + len(seen))
                     if is_history and identifier not in evidence:
                         evidence[identifier] = {'type': row['kind'], 'timestamp': row['timestamp'],
-                            'source': f"{row['name']}:{row['position']}", 'text': row['excerpt'][:400],
-                            'truncated': len(row['text']) > len(row['excerpt'][:400])}
+                            'source': f"{row['name']}:{row['position']}", 'text': row['excerpt'][:EVIDENCE_CHAR_LIMIT],
+                            'truncated': len(row['text']) > len(row['excerpt'][:EVIDENCE_CHAR_LIMIT])}
         for identifier in exact | current_mentions.keys() | past_mentions.keys():
             row = db.execute('SELECT normalized,name FROM agents WHERE id=?', (identifier,)).fetchone()
             names[identifier] = (row['normalized'], row['name'])
@@ -142,9 +147,3 @@ def inspect_history(catalog, agent_name, logs, offset=0):
                     'truncated': r['length'] > 1000, 'source': f"{agent_name}:{r['position']}"} for r in rows]
     return {'agent_name': agent_name, 'entries': entries, 'total_matches': count,
             'next_offset': offset + 6 if offset + 6 < count else None}
-
-
-def ownership_profile(agent_name, logs):
-    with logs.catalog.connect() as db:
-        row = db.execute('SELECT id FROM agents WHERE name=?', (agent_name,)).fetchone()
-        return _profile(db, row[0]) if row else {'name': agent_name}
