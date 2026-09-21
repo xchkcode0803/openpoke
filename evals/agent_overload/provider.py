@@ -51,7 +51,7 @@ def failure_kind(error: str | None) -> str | None:
         return "agent_iteration_limit"
     if any(value in text for value in ("context length", "context_length", "context window", "capacity limit")):
         return "capacity"
-    if any(value in text for value in ("openrouter", "429", "jev request", "fallback request")):
+    if any(value in text for value in ("openrouter", "429", "gemini judge request")):
         return "provider"
     return "harness"
 

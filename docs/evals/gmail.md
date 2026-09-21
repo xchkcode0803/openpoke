@@ -37,7 +37,7 @@ attachments are outside coverage and return explicit unsupported errors.
 ## Models and artifacts
 
 Live Gmail roles use `google/gemini-3.8-flash`. Flexible checks use
-`typesafe/jev-1.13`, with `google/gemini-3.8-flash` as the fallback. The runner
+`google/gemini-3.8-flash`. The runner
 records each model request, tool event, mailbox readback, judge decision, provider
 usage, and cost in a fresh local artifact directory under `.deepeval/gmail/` unless
 `--output` selects another location. Artifacts are not committed.

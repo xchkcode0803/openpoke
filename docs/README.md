@@ -1,7 +1,7 @@
 # Evaluation documentation
 
 OpenPoke uses `google/gemini-3.8-flash` for production inference and live
-evaluation runs. Semantic grading uses `typesafe/jev-1.13`; for low-confidence decisions, the fallback is `google/gemini-3.8-flash`.
+evaluation runs. Semantic grading uses `google/gemini-3.8-flash` directly.
 
 - [Gmail](evals/gmail.md) covers the disposable Emulate mailbox, its safety
   checks, and the 28-scenario development run.

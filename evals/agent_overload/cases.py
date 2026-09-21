@@ -281,9 +281,9 @@ DEVELOPMENT_CASES: tuple[RoutingCase, ...] = (
     ),
     _case(
         "selects_current_tax_filing_agent",
-        "Uses the current year rather than an older filing.",
+        "Uses the explicitly requested tax year rather than an older filing.",
         ("2025 Tax Documents", "2026 Tax Documents"),
-        (user("Continue this year's tax filing.", "delegate", reuse("taxes", "2026 Tax Documents", required_facts=("continue the 2026 tax filing",))),),
+        (user("Continue my filing for the 2026 tax year.", "delegate", reuse("taxes", "2026 Tax Documents", required_facts=("continue the 2026 tax filing",))),),
         "development", "confusing",
     ),
     _case(

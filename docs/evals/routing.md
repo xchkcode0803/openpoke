@@ -25,7 +25,7 @@ or routine live routing verification.
 
 Fixtures define expected worker reuse or creation, required instruction content,
 and multi-turn conversation state. Deterministic checks evaluate routing decisions;
-Jev with a Gemini fallback evaluates instruction fidelity where needed. The
+Gemini evaluates instruction fidelity where needed. The
 benchmark accepts valid discovery sequences, but grades the selected existing owner
 and instruction fidelity. It does not grade incidental query wording or stylistic
 invented names.

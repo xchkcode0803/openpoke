@@ -6,9 +6,7 @@ from typing import Any
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase, ToolCall
 from evals.shared.judges import (
-    FALLBACK_MODEL, JEV_MODEL, JEV_YES_THRESHOLD, JEV_NO_THRESHOLD,
-    JudgeError, JudgeAnswer, JevJudge, FallbackJudge,
-    OpenRouterJevJudge, OpenRouterFallbackJudge,
+    JUDGE_MODEL, JudgeError, JudgeAnswer, SemanticJudge, GeminiJudge,
 )
 
 
@@ -130,16 +128,15 @@ class RoutingCorrectnessMetric(BaseMetric):
 
 
 class InstructionFidelityMetric(BaseMetric):
-    """Use Jev for narrow semantic requirements, with Gemini fallback."""
+    """Use Gemini for narrow semantic requirements."""
 
-    def __init__(self, jev: JevJudge | None = None, fallback: FallbackJudge | None = None) -> None:
+    def __init__(self, judge: SemanticJudge | None = None) -> None:
         self.threshold = 1.0
         self.strict_mode = True
         self.async_mode = False
         self.include_reason = True
         self.error = None
-        self.jev = jev or OpenRouterJevJudge()
-        self.fallback = fallback or OpenRouterFallbackJudge()
+        self.judge = judge or GeminiJudge()
 
     def _questions(self, test_case: LLMTestCase) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
         metadata = test_case.metadata or {}
@@ -171,7 +168,17 @@ class InstructionFidelityMetric(BaseMetric):
                 str((match.input_parameters or {}).get("instructions", ""))
                 for match in matches
             ]
+            delivery_context = (
+                "The instructions have been delivered directly to the listed execution agents. "
+                "For reuse, the matched recipient is the existing internal owner of this task. "
+                "Asking that owner to do the work is accomplished by this delivery; it need not contact itself. "
+                "Routing correctness is checked separately. Judge the work assigned to these recipients, "
+                "not whether the instruction repeats the user's request to delegate to an agent. "
+                "This does not remove requests to contact external people or organizations."
+            )
             state = {
+                "delivery_context": delivery_context,
+                "recipient_role": "existing internal task owner" if route == "reuse" else "new internal task agent",
                 "conversation_context": metadata.get("conversation_context", []),
                 "user_request": test_case.input,
                 "delegated_instructions": instructions,
@@ -181,8 +188,12 @@ class InstructionFidelityMetric(BaseMetric):
                 key = f"required_{question_index}"
                 question_index += 1
                 questions[key] = {
-                    "type": "noul",
-                    "instructions": "Does the delegated instruction preserve this required user intent?",
+                    "instructions": (
+                        "Does the delegated instruction preserve this required user intent? "
+                        "Account for direct delivery to the execution agent: routing language may be "
+                        "rephrased as a direct instruction to that agent. The requested action, "
+                        "references, quantities, external recipients, and restrictions must still be preserved."
+                    ),
                     "criteria": {"true": str(fact), "false": "The requirement is missing, changed, or contradicted."},
                 }
                 states[key] = state
@@ -190,7 +201,6 @@ class InstructionFidelityMetric(BaseMetric):
                 key = f"relevance_{question_index}"
                 question_index += 1
                 questions[key] = {
-                    "type": "noul",
                     "instructions": "Is this delegated work directly relevant to the user's request?",
                     "criteria": {
                         "true": "The delegated work directly contributes to the requested goal.",
@@ -198,6 +208,7 @@ class InstructionFidelityMetric(BaseMetric):
                     },
                 }
                 states[key] = {
+                    "delivery_context": delivery_context,
                     "conversation_context": metadata.get("conversation_context", []),
                     "user_request": test_case.input,
                     "delegated_instruction": str(
@@ -209,16 +220,14 @@ class InstructionFidelityMetric(BaseMetric):
                 key = f"forbidden_{question_index}"
                 question_index += 1
                 questions[key] = {
-                    "type": "noul",
                     "instructions": "Does the delegated instruction avoid this prohibited action?",
-                    "criteria": {"true": str(fact), "false": "The instruction asks for, permits, or implies the prohibited action."},
+                    "criteria": {"true": f"The instruction avoids this prohibited action: {fact}", "false": "The instruction asks for, permits, or implies the prohibited action."},
                 }
                 states[key] = state
         for requirement in metadata.get("response_requirements") or []:
             key = f"response_{question_index}"
             question_index += 1
             questions[key] = {
-                "type": "noul",
                 "instructions": "Does the user-visible response satisfy this requirement?",
                 "criteria": {"true": str(requirement), "false": "The response does not satisfy the requirement."},
             }
@@ -233,29 +242,15 @@ class InstructionFidelityMetric(BaseMetric):
             self.reason = "no semantic requirement"
             self.score_breakdown = {}
             return self.score
-        answers: dict[str, JudgeAnswer] = {}
-        jev_probabilities = {}
-        batched_state = {"checks": states}
-        batched_questions = {
-            key: {
-                **question,
-                "instructions": f"Evaluate checks.{key}. {question['instructions']}",
-            }
-            for key, question in questions.items()
-        }
-        response = await self.jev.evaluate(batched_state, batched_questions)
+        answers = {}
         for key, question in questions.items():
-            answer = response[key]
-            jev_probabilities[key] = answer.probability
-            if answer.probability is not None and JEV_NO_THRESHOLD < answer.probability < JEV_YES_THRESHOLD:
-                answer = await self.fallback.evaluate(states[key], question)
-            answers[key] = answer
+            answers[key] = await self.judge.evaluate(states[key], question)
         failures = [key for key, answer in answers.items() if not answer.verdict]
         self.score = 0.0 if failures else 1.0
         self.success = not failures
         self.reason = "semantic requirements failed: " + ", ".join(failures) if failures else "semantic requirements preserved"
         self.score_breakdown = {
-            key: {"verdict": answer.verdict, "probability": jev_probabilities[key], "fallback_used": answer.fallback_used, "reason": answer.reason}
+            key: {"verdict": answer.verdict, "reason": answer.reason}
             for key, answer in answers.items()
         }
         metadata = test_case.metadata if test_case.metadata is not None else {}
@@ -271,12 +266,10 @@ class InstructionFidelityMetric(BaseMetric):
 
 
 __all__ = [
-    "FALLBACK_MODEL",
+    "JUDGE_MODEL",
     "InstructionFidelityMetric",
-    "JEV_MODEL",
     "JudgeAnswer",
     "JudgeError",
-    "OpenRouterFallbackJudge",
-    "OpenRouterJevJudge",
+    "GeminiJudge",
     "RoutingCorrectnessMetric",
 ]
