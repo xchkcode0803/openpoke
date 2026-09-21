@@ -78,5 +78,10 @@ The web app proxies API calls to the Python server using the values in `.env`, s
 - `web/` – Next.js app
 - `server/data/` – runtime data (ignored by git)
 
+## Evaluation
+
+See the [evaluation documentation](docs/README.md) for benchmark design and model
+comparison results, and the [eval setup guide](evals/README.md) for test commands.
+
 ## License
 MIT — see [LICENSE](LICENSE).

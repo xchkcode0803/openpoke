@@ -1,0 +1,772 @@
+{
+  "scenarios": 99,
+  "expected_scenarios": 99,
+  "outcomes": {
+    "pass": 95,
+    "agent_failure": 4
+  },
+  "turns": 102,
+  "routing_passed_turns": 99,
+  "metric_counts": {
+    "InstructionFidelityMetric": {
+      "1.0": 99,
+      "0.0": 1
+    },
+    "RoutingCorrectnessMetric": {
+      "1.0": 99,
+      "0.0": 3
+    }
+  },
+  "agent_cost": 1.695717,
+  "judge_cost": 0.019163615999999998,
+  "model_calls": 112,
+  "returned_models": {
+    "anthropic/claude-sonnet-4": 112
+  },
+  "input_tokens": 475239,
+  "output_tokens": 18000,
+  "latency_median": 6.252915034536272,
+  "semantic_measured_turns": 98,
+  "discovery_calls": 0,
+  "timing_totals": {
+    "request_seconds": 283.66195477638394,
+    "pacing_seconds": 365.55543635075446,
+    "retry_wait_seconds": 0.0
+  },
+  "ledger_charges": null,
+  "unresolved_reservations": [],
+  "cases": [
+    {
+      "case": "accepts_either_equivalent_agent",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "avoids_duplicate_agent_for_paraphrased_follow_up",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_agent_for_new_task",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_agent_when_similar_names_have_different_purposes__roster_10",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_agent_when_similar_names_have_different_purposes__roster_100",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_agent_when_similar_names_have_different_purposes__roster_1000",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_related_agents_when_existing_travel_agents_do_not_fit",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_1000_unrelated_seed_1110",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_100_unrelated_seed_210",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_10_unrelated_seed_120",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_250_unrelated_seed_360",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_500_unrelated_seed_610",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_50_unrelated_seed_160",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_requests__roster_10",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_requests__roster_100",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_requests__roster_1000",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_1000_unrelated_seed_1130",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_100_unrelated_seed_230",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_10_unrelated_seed_140",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_250_unrelated_seed_380",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_400",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__shuffle_401",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__shuffle_402",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__shuffle_403",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__target_first",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__target_last",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__target_middle",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_similar_250_seed_550",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_similar_25_seed_325",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_similar_5_seed_305",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_500_unrelated_seed_630",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_person_different_tasks__roster_50_unrelated_seed_180",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_task_different_dates__roster_10",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_task_different_dates__roster_100",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_task_different_dates__roster_1000",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "distinguishes_same_task_different_subjects",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "does_not_delegate_simple_response_under_large_roster",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "held_out_creates_new_home_project",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "held_out_preserves_no_purchase_restriction",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "held_out_reports_worker_update",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "held_out_reuses_renewal_agent",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "held_out_routes_two_existing_tasks",
+      "outcome": "agent_failure",
+      "failures": [
+        {
+          "name": "InstructionFidelityMetric",
+          "score": 0.0,
+          "reason": "semantic requirements failed: required_2"
+        }
+      ],
+      "external_outcome": null
+    },
+    {
+      "case": "held_out_uses_context_for_terse_follow_up",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "prefers_context_owner_over_keyword_match__roster_10",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "prefers_context_owner_over_keyword_match__roster_100",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "prefers_context_owner_over_keyword_match__roster_1000",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "preserves_draft_only_restriction",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reports_completed_worker_update_without_redelegating",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "requests_details_after_incomplete_worker_update",
+      "outcome": "agent_failure",
+      "failures": [
+        {
+          "name": "RoutingCorrectnessMetric",
+          "score": 0.0,
+          "reason": "missing reuse delegation for hotel_details: Montreal Hotel Search"
+        }
+      ],
+      "external_outcome": null
+    },
+    {
+      "case": "returns_to_original_agent_after_topic_switch",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "returns_to_previous_task_after_topic_changes__roster_10",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "returns_to_previous_task_after_topic_changes__roster_100",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "returns_to_previous_task_after_topic_changes__roster_1000",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_agent_created_earlier_in_conversation",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_1000_unrelated_seed_1100",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_100_unrelated_seed_200",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_10_unrelated_seed_110",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_250_unrelated_seed_350",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_300",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__shuffle_401",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__shuffle_402",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__shuffle_403",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__target_first",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__target_last",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__target_middle",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_similar_250_seed_450",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_similar_25_seed_225",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_similar_5_seed_205",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_500_unrelated_seed_600",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_existing_hotel_search_agent__roster_50_unrelated_seed_150",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_original_email_agent_despite_similar_names__roster_10",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_original_email_agent_despite_similar_names__roster_100",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "reuses_original_email_agent_despite_similar_names__roster_1000",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "routes_existing_and_new_task",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "routes_multiple_followups_to_their_existing_owners__roster_10",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "routes_multiple_followups_to_their_existing_owners__roster_100",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "routes_multiple_followups_to_their_existing_owners__roster_1000",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "routes_requested_next_step_after_worker_update",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "routes_two_existing_tasks",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "selects_agent_from_unrelated_roster",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "selects_broad_agent_for_trip_wide_change",
+      "outcome": "agent_failure",
+      "failures": [
+        {
+          "name": "RoutingCorrectnessMetric",
+          "score": 0.0,
+          "reason": "extra delegation: Montreal Hotel Search, Montreal Restaurant Reservations"
+        }
+      ],
+      "external_outcome": null
+    },
+    {
+      "case": "selects_current_tax_filing_agent",
+      "outcome": "agent_failure",
+      "failures": [
+        {
+          "name": "RoutingCorrectnessMetric",
+          "score": 0.0,
+          "reason": "missing reuse delegation for taxes: 2026 Tax Documents; extra delegation: 2025 Tax Documents"
+        }
+      ],
+      "external_outcome": null
+    },
+    {
+      "case": "selects_specialized_agent_over_broad_agent",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "selects_trip_agent_using_conversation_context__roster_10",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "selects_trip_agent_using_conversation_context__roster_100",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "selects_trip_agent_using_conversation_context__roster_1000",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "uses_conversation_to_resolve_omitted_trip_subject",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "uses_conversation_to_resolve_pronoun",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "uses_conversation_to_resolve_pronoun__roster_1000_unrelated_seed_1120",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "uses_conversation_to_resolve_pronoun__roster_100_unrelated_seed_220",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "uses_conversation_to_resolve_pronoun__roster_10_unrelated_seed_130",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "uses_conversation_to_resolve_pronoun__roster_250_unrelated_seed_370",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "uses_conversation_to_resolve_pronoun__roster_500_unrelated_seed_620",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "uses_conversation_to_resolve_pronoun__roster_50_unrelated_seed_170",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "uses_latest_topic_after_user_correction",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "uses_summary_to_route_follow_up",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    },
+    {
+      "case": "waits_for_duplicate_worker_update",
+      "outcome": "pass",
+      "failures": [],
+      "external_outcome": null
+    }
+  ],
+  "cost_per_success": 0.017849652631578946,
+  "not_run": 0,
+  "artifacts": "/Users/4525150/Desktop/openpoke/.deepeval/runs/20260920T010003-97fa01fa",
+  "initial_contracts": {
+    "creates_agent_for_new_task": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "reuses_existing_hotel_search_agent": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "selects_agent_from_unrelated_roster": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "routes_two_existing_tasks": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "preserves_draft_only_restriction": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "avoids_duplicate_agent_for_paraphrased_follow_up": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "routes_existing_and_new_task": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "uses_conversation_to_resolve_pronoun": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "uses_conversation_to_resolve_omitted_trip_subject": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "uses_summary_to_route_follow_up": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "uses_latest_topic_after_user_correction": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "reuses_agent_created_earlier_in_conversation": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "returns_to_original_agent_after_topic_switch": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "requests_details_after_incomplete_worker_update": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "reports_completed_worker_update_without_redelegating": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "routes_requested_next_step_after_worker_update": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "waits_for_duplicate_worker_update": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "distinguishes_same_person_different_tasks": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "distinguishes_same_task_different_subjects": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "selects_specialized_agent_over_broad_agent": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "selects_broad_agent_for_trip_wide_change": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "selects_current_tax_filing_agent": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "accepts_either_equivalent_agent": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "creates_related_agents_when_existing_travel_agents_do_not_fit": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "does_not_delegate_simple_response_under_large_roster": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "held_out_reuses_renewal_agent": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "held_out_creates_new_home_project": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "held_out_uses_context_for_terse_follow_up": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "held_out_routes_two_existing_tasks": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "held_out_preserves_no_purchase_restriction": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "held_out_reports_worker_update": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "reuses_existing_hotel_search_agent__roster_10_unrelated_seed_110": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "reuses_existing_hotel_search_agent__roster_50_unrelated_seed_150": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_100_unrelated_seed_200": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_250_unrelated_seed_350": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_unrelated_seed_600": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_1000_unrelated_seed_1100": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_10_unrelated_seed_120": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_50_unrelated_seed_160": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_100_unrelated_seed_210": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_250_unrelated_seed_360": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_500_unrelated_seed_610": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "creates_related_agents_when_existing_travel_agents_do_not_fit__roster_1000_unrelated_seed_1110": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "uses_conversation_to_resolve_pronoun__roster_10_unrelated_seed_130": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "uses_conversation_to_resolve_pronoun__roster_50_unrelated_seed_170": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "uses_conversation_to_resolve_pronoun__roster_100_unrelated_seed_220": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "uses_conversation_to_resolve_pronoun__roster_250_unrelated_seed_370": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "uses_conversation_to_resolve_pronoun__roster_500_unrelated_seed_620": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "uses_conversation_to_resolve_pronoun__roster_1000_unrelated_seed_1120": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_10_unrelated_seed_140": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "distinguishes_same_person_different_tasks__roster_50_unrelated_seed_180": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_100_unrelated_seed_230": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_250_unrelated_seed_380": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_unrelated_seed_630": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_1000_unrelated_seed_1130": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_similar_5_seed_205": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_similar_5_seed_305": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_similar_25_seed_225": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_similar_25_seed_325": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_300": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_400": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_similar_250_seed_450": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_similar_250_seed_550": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__target_first": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__target_first": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__target_middle": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__target_middle": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__target_last": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__target_last": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__shuffle_401": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__shuffle_401": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__shuffle_402": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__shuffle_402": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_existing_hotel_search_agent__roster_500_similar_100_seed_501__shuffle_403": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_tasks__roster_500_similar_100_seed_503__shuffle_403": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_original_email_agent_despite_similar_names__roster_10": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "reuses_original_email_agent_despite_similar_names__roster_100": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "reuses_original_email_agent_despite_similar_names__roster_1000": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "selects_trip_agent_using_conversation_context__roster_10": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "selects_trip_agent_using_conversation_context__roster_100": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "selects_trip_agent_using_conversation_context__roster_1000": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_requests__roster_10": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "distinguishes_same_person_different_requests__roster_100": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_person_different_requests__roster_1000": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_task_different_dates__roster_10": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "distinguishes_same_task_different_dates__roster_100": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "distinguishes_same_task_different_dates__roster_1000": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "prefers_context_owner_over_keyword_match__roster_10": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "prefers_context_owner_over_keyword_match__roster_100": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "prefers_context_owner_over_keyword_match__roster_1000": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "returns_to_previous_task_after_topic_changes__roster_10": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "returns_to_previous_task_after_topic_changes__roster_100": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "returns_to_previous_task_after_topic_changes__roster_1000": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "routes_multiple_followups_to_their_existing_owners__roster_10": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "routes_multiple_followups_to_their_existing_owners__roster_100": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "routes_multiple_followups_to_their_existing_owners__roster_1000": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "creates_agent_when_similar_names_have_different_purposes__roster_10": "44146083b93295ede6241aad878db6fb96e3c1ea1e79ed27451b635d12acc351",
+    "creates_agent_when_similar_names_have_different_purposes__roster_100": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6",
+    "creates_agent_when_similar_names_have_different_purposes__roster_1000": "fec86338e39018f1b33c55be2194b66a9b28a3dacc75fb96c9e1b04b05f903c6"
+  },
+  "manifest": {
+    "historical": true,
+    "git_sha": "78bba2c",
+    "source_report": "docs/agent_roster_search_results.md",
+    "source_trace_sha256": "ff31ff6e32c8a3f58bb34376e646a36d071a60af99a26b6ab467b608f07930a9",
+    "model": "anthropic/claude-sonnet-4",
+    "case_fingerprint": "f466df1ae88422eb3a2357d0cc6d913918e56c87128a4725aa31062cacac68fd"
+  },
+  "agent_openrouter_charges": 1.695717,
+  "upstream_inference_estimate": 0
+}
