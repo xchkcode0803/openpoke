@@ -9,7 +9,7 @@ import os
 import pytest
 from deepeval import assert_test
 
-from evals.agent_overload.cases import (
+from evals.agent_overload.cases.base import (
     DEVELOPMENT_CASES,
     add_similar_agents,
     full_cases,
@@ -17,9 +17,9 @@ from evals.agent_overload.cases import (
     smoke_cases,
     standard_cases,
 )
-from evals.agent_overload.harness import run_case
-from evals.agent_overload.metrics import RoutingCorrectnessMetric
-from evals.agent_overload.stress_cases import stress_cases
+from evals.agent_overload.runtime.harness import run_case
+from evals.agent_overload.grading.metrics import RoutingCorrectnessMetric
+from evals.agent_overload.cases.stress import stress_cases
 
 
 def _tool_call(identifier: str, name: str, arguments: dict) -> dict:

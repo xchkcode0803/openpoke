@@ -1,5 +1,5 @@
 """Additional history fixtures; the original baseline case definitions stay frozen."""
-from .cases import RoutingCase, RoutingTurn, reuse, validate_cases
+from .base import RoutingCase, RoutingTurn, reuse, validate_cases
 
 
 INSPECTION_CASES = (

@@ -1,8 +1,8 @@
 """Versioned synthetic populations; large rosters are built only during execution."""
 import hashlib
 from dataclasses import dataclass, replace
-from .stress_cases import stress_seeds
-from .challenge_cases import challenges
+from .stress import stress_seeds
+from .challenges import challenges
 
 VERSION = 'clustered_personal_tasks_v1'
 SCALE_SIZES = (10, 100, 1000, 10_000, 100_000, 1_000_000)

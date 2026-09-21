@@ -17,7 +17,7 @@ from typing import Any
 from deepeval.test_case import LLMTestCase, ToolCall
 from deepeval.tracing import observe, trace, update_current_span, update_current_trace
 
-from .cases import ExpectedDelegation, RoutingCase
+from ..cases.base import ExpectedDelegation, RoutingCase
 from evals.shared.state import create_stores
 from evals.shared.usage import effective_cost
 from .provider import MODEL, context_limits, failure_kind
@@ -344,7 +344,7 @@ def evaluate_live_case(case, history=None) -> None:
     """Run and grade a live case, preserving every turn even when grading fails."""
     from unittest.mock import patch
     from deepeval import assert_test
-    from .metrics import InstructionFidelityMetric, RoutingCorrectnessMetric
+    from ..grading.metrics import InstructionFidelityMetric, RoutingCorrectnessMetric
     from .provider import (
         MODEL, context_limits, interaction_completion, save_result, verify_context_limit,
     )

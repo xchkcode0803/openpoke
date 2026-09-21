@@ -13,9 +13,9 @@ import time
 from unittest.mock import patch
 from uuid import uuid4
 
-from .config import EvalConfig, DEFAULT_MODEL, FIXTURE_VERSION, GRADER_VERSION
-from .provider import Provider
-from .reporting import summarize, write_json
+from .runtime.config import EvalConfig, DEFAULT_MODEL, FIXTURE_VERSION, GRADER_VERSION
+from .runtime.provider import Provider
+from .grading.reporting import summarize, write_json
 
 
 def load_credentials():
@@ -40,7 +40,7 @@ def classify(record):
 
 async def grade(case, record):
     from deepeval.test_case import LLMTestCase
-    from .metrics import GmailStateMetric, deterministic, semantic
+    from .grading.metrics import GmailStateMetric, deterministic, semantic
 
     test_case = LLMTestCase(
         input=json.dumps([turn.message for turn in case.turns]),
@@ -57,8 +57,8 @@ async def grade(case, record):
 
 
 async def run(args):
-    from .cases import select_cases
-    from .harness import run_case
+    from .cases.definitions import select_cases
+    from .runtime.harness import run_case
     from deepeval.tracing import trace
     import evals.shared.judges as shared_judges
 

@@ -13,9 +13,9 @@ from unittest.mock import patch
 from .adapter import GmailAdapter
 from .config import EvalConfig
 from .emulator import Emulator
-from .mailbox import USER
+from ..cases.mailbox import USER
 from .tracing import Recorder
-from .types import Case
+from ..types import Case
 
 
 class ScenarioTasks:

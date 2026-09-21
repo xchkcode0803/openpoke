@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
-from .routing_population import Variant, materialize
+from ..cases.population import Variant, materialize
 
 
 def write_json(path, value):
@@ -106,7 +106,7 @@ def prepare(variant, directory):
     search_time = time.perf_counter() - started
     feasibility = []
     if variant.kind == "challenge":
-        from .challenge_cases import challenges
+        from ..cases.challenges import challenges
         for tool, arguments in challenges()[variant.index].discovery:
             value = (discovery.search_names(roster.catalog, **arguments) if tool == "search_agents"
                      else discovery.inspect_history(roster.catalog, logs=logs, **arguments))
@@ -172,7 +172,7 @@ def run_variant(variant, mode):
     if mode == "live" and os.getenv("RUN_LIVE_EVALS") != "1":
         raise RuntimeError("Set RUN_LIVE_EVALS=1 for paid execution")
     destination = _artifact_directory(mode, variant)
-    command = [sys.executable, "-m", "evals.agent_overload.routing_campaign", mode, variant.kind,
+    command = [sys.executable, "-m", "evals.agent_overload.runtime.campaign", mode, variant.kind,
                str(variant.index), str(variant.size), str(destination)]
     with tempfile.TemporaryDirectory(prefix="openpoke-routing-") as directory:
         command.append(directory)

@@ -1,8 +1,8 @@
 """Large variants are descriptors until their test executes."""
 import os
 import pytest
-from evals.agent_overload.routing_campaign import run_variant
-from evals.agent_overload.routing_population import SCALE_VARIANTS
+from evals.agent_overload.runtime.campaign import run_variant
+from evals.agent_overload.cases.population import SCALE_VARIANTS
 
 
 @pytest.mark.live

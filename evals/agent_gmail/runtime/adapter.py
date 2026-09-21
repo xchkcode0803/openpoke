@@ -7,8 +7,8 @@ from email.message import EmailMessage
 from email.utils import parsedate_to_datetime
 from urllib.parse import quote
 
-from .mailbox import DATE, USER
-from .types import Fault
+from ..cases.mailbox import DATE, USER
+from ..types import Fault
 
 
 class UnsupportedOperation(RuntimeError):

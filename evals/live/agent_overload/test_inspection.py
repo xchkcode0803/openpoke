@@ -3,8 +3,8 @@ import os
 
 import pytest
 
-from evals.agent_overload.harness import evaluate_live_case
-from evals.agent_overload.inspection_cases import INSPECTION_CASES, INSPECTION_HISTORY
+from evals.agent_overload.runtime.harness import evaluate_live_case
+from evals.agent_overload.cases.inspection import INSPECTION_CASES, INSPECTION_HISTORY
 
 
 @pytest.mark.live

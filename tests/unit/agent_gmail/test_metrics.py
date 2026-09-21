@@ -1,6 +1,6 @@
 from dataclasses import replace
-from evals.agent_gmail.cases import BASE, DEVELOPMENT, select_cases
-from evals.agent_gmail.metrics import deterministic, match_all, matches
+from evals.agent_gmail.cases.definitions import BASE, DEVELOPMENT, select_cases
+from evals.agent_gmail.grading.metrics import deterministic, match_all, matches
 from evals.agent_gmail.types import Case, ExpectedMail, Turn
 
 
@@ -49,8 +49,8 @@ def test_extra_sends_fail():
 
 def test_semantic_fallback_only_on_uncertain_answers():
     import asyncio
-    from evals.agent_overload.metrics import JudgeAnswer
-    from evals.agent_gmail.metrics import semantic
+    from evals.agent_overload.grading.metrics import JudgeAnswer
+    from evals.agent_gmail.grading.metrics import semantic
     class Jev:
         async def evaluate(self, state, questions):
             return {key: JudgeAnswer(True, .5) for key in questions}
@@ -115,14 +115,14 @@ def test_sent_draft_must_match_latest_approved_preview():
 def test_deepeval_accepts_gmail_state_metric():
     from deepeval import assert_test
     from deepeval.test_case import LLMTestCase
-    from evals.agent_gmail.metrics import GmailStateMetric
+    from evals.agent_gmail.grading.metrics import GmailStateMetric
     case = Case("noop", "approval", (Turn("Leave the mailbox unchanged"),))
     assert_test(LLMTestCase(input=case.turns[0].message, actual_output="Unchanged", metadata={"record": record([])}),
                 metrics=[GmailStateMetric(case)], run_async=False)
 
 
 def test_judge_evidence_deduplicates_reads_but_preserves_mutations_and_errors():
-    from evals.agent_gmail.metrics import build_judge_state
+    from evals.agent_gmail.cases.evidence import build_judge_state
     from evals.agent_gmail.types import Mail
     source = Mail("source", "alice@example.com", "owner@example.com", "Cedar", "Launch Friday")
     case = Case("evidence", "search", (Turn("Find Cedar"),), (source,))

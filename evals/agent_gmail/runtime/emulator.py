@@ -14,9 +14,9 @@ from pathlib import Path
 
 import httpx
 
-from .types import Mail
+from ..types import Mail
 
-from .mailbox import USER, TOKEN, DATE
+from ..cases.mailbox import USER, TOKEN, DATE
 
 
 def decode_message(message: dict) -> dict:
@@ -65,7 +65,7 @@ class Emulator:
             ]},
         }
         (root / "seed.json").write_text(json.dumps(seed))
-        launcher = Path(__file__).parent / "emulate" / "service.mjs"
+        launcher = Path(__file__).parents[1] / "emulate" / "service.mjs"
         self.stderr = (root / "stderr.log").open("w+")
         try:
             self.process = subprocess.Popen(

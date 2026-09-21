@@ -1,4 +1,4 @@
-from evals.agent_gmail.reporting import summarize
+from evals.agent_gmail.grading.reporting import summarize
 from evals.agent_gmail.run import classify
 
 

@@ -6,8 +6,8 @@ benchmark intentionally isolates a narrower concern.
 
 | Path | Purpose |
 |---|---|
-| `agent_gmail/` | Gmail fixtures, Vercel Emulate adapter, orchestration, grading, and runner. |
-| `agent_overload/` | Routing fixtures, candidate discovery, grading, and scale support. |
+| `agent_gmail/` | Gmail `cases/`, `runtime/`, and `grading/`, plus its runner. |
+| `agent_overload/` | Routing `cases/`, `runtime/`, `grading/`, and `performance/`. |
 | `live/` | Explicitly invoked paid pytest collections for Gmail and routing. |
 | `shared/` | Small utilities shared by benchmark packages. |
 
@@ -46,3 +46,7 @@ Production and live inference use `google/gemini-3.8-flash`. Semantic graders us
 `typesafe/jev-1.13` with Gemini fallback. Live runs retain their own local traces,
 usage, and cost records; do not commit them. Read the [documentation index](../docs/README.md)
 for benchmark design and limits.
+
+Within each benchmark package, `cases/` contains authored fixtures and generated
+populations, `runtime/` contains adapters and harnesses, and `grading/` contains
+metrics and reports. Agent-overload keeps its opt-in measurements in `performance/`.

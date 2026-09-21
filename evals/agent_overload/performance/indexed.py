@@ -8,8 +8,8 @@ import sys
 import tempfile
 import time
 from uuid import uuid4
-from .routing_population import Variant,materialize,SCALE_SIZES
-from .routing_campaign import supervise,write_json
+from ..cases.population import Variant, materialize, SCALE_SIZES
+from ..runtime.campaign import supervise, write_json
 
 
 _run_root = None
@@ -60,7 +60,7 @@ def measure(size, directory, destination):
         query=case.turns[0].message;history='\n'.join(text for _,text in case.initial_conversation)
         fresh_directory=destination/'fresh'
         measured=fresh_directory/'measurements.json'
-        state=supervise([sys.executable,'-m','evals.agent_overload.indexed_performance','lookup',directory,query,history,str(measured)],fresh_directory,seconds=300,new_session=False)
+        state=supervise([sys.executable,'-m','evals.agent_overload.performance.indexed','lookup',directory,query,history,str(measured)],fresh_directory,seconds=300,new_session=False)
         if state['resource_failure'] or state['returncode']:
             raise RuntimeError(f'Fresh-process lookup failed: {state}')
         measurements=json.loads(measured.read_text())
@@ -75,7 +75,7 @@ def measure(size, directory, destination):
 def run_measurement(size):
     destination=root_dir()/'performance'/str(size)
     with tempfile.TemporaryDirectory(prefix='openpoke-index-build-') as directory:
-        state=supervise([sys.executable,'-m','evals.agent_overload.indexed_performance','build',str(size),directory,str(destination)],destination,seconds=900)
+        state=supervise([sys.executable,'-m','evals.agent_overload.performance.indexed','build',str(size),directory,str(destination)],destination,seconds=900)
     if state['resource_failure'] or not (destination/'measurements.json').exists():return {'failure':state}
     return json.loads((destination/'measurements.json').read_text())
 

@@ -13,7 +13,7 @@ from .usage import effective_cost
 from .models import GEMINI, JEV
 
 from evals.shared.http import post_with_retry
-from evals.agent_overload.provider import save_result
+from evals.agent_overload.runtime.provider import save_result
 
 JEV_MODEL = JEV
 FALLBACK_MODEL = GEMINI

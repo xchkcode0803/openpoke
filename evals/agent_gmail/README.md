@@ -1,9 +1,9 @@
 # Gmail evaluation package
 
 This package runs the real interaction, execution, and email-search agents against
-a disposable Vercel Emulate Gmail mailbox. `cases.py` defines immutable fixtures;
-`adapter.py` translates the existing Gmail boundary; `harness.py` executes isolated
-turns; and `metrics.py` grades mailbox state and visible behavior.
+a disposable Vercel Emulate Gmail mailbox. `cases/` defines immutable fixtures and
+mailbox evidence; `runtime/` translates the existing Gmail boundary and executes
+isolated turns; and `grading/` grades mailbox state and visible behavior.
 
 The runner supports smoke, development, and full suites, targeted cases, and model
 overrides. It does not change production prompts, tools, or runtime limits. The

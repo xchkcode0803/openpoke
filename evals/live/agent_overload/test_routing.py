@@ -5,13 +5,13 @@ from __future__ import annotations
 import os
 
 import pytest
-from evals.agent_overload.cases import (
+from evals.agent_overload.cases.base import (
     full_cases,
     smoke_cases,
     standard_cases,
 )
-from evals.agent_overload.harness import evaluate_live_case
-from evals.agent_overload.stress_cases import stress_cases
+from evals.agent_overload.runtime.harness import evaluate_live_case
+from evals.agent_overload.cases.stress import stress_cases
 
 
 def suite_parameters():

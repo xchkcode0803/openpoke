@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from evals.agent_overload.harness import _StubBatchManager
+from evals.agent_overload.runtime.harness import _StubBatchManager
 from evals.shared.state import create_stores
 
 

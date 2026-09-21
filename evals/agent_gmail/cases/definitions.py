@@ -1,7 +1,7 @@
 """Versioned authored behavior cases. Expectations never depend on sampled output."""
 from dataclasses import replace
 from .mailbox import USER
-from .types import Case, ExpectedMail as E, Fault, Mail, Turn as T
+from ..types import Case, ExpectedMail as E, Fault, Mail, Turn as T
 
 ALICE = "alice@example.com"
 BOB = "bob@example.com"

@@ -8,8 +8,8 @@ import json
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 
-from .types import Case, ExpectedMail
-from .evidence import previews, build_judge_state
+from ..types import Case, ExpectedMail
+from ..cases.evidence import previews, build_judge_state
 
 
 CONTENT_CRITERION = (

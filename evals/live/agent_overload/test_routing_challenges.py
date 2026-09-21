@@ -1,8 +1,8 @@
 """Authored ownership challenges, separate from the frozen baseline."""
 import os
 import pytest
-from evals.agent_overload.routing_campaign import run_variant
-from evals.agent_overload.routing_population import CHALLENGE_VARIANTS
+from evals.agent_overload.runtime.campaign import run_variant
+from evals.agent_overload.cases.population import CHALLENGE_VARIANTS
 
 
 @pytest.mark.live

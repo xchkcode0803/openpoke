@@ -1,4 +1,5 @@
-from evals.agent_gmail.emulator import Emulator, USER
+from evals.agent_gmail.runtime.emulator import Emulator
+from evals.agent_gmail.cases.mailbox import USER
 from evals.agent_gmail.types import Mail
 
 

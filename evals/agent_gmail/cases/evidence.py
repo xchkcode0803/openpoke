@@ -1,7 +1,7 @@
 """Prepare complete, deduplicated mailbox evidence for semantic judges."""
 from dataclasses import asdict
 
-from .types import Case
+from ..types import Case
 
 
 def previews(events):

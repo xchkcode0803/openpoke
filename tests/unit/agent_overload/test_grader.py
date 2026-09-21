@@ -7,11 +7,11 @@ import asyncio
 import pytest
 from deepeval.test_case import LLMTestCase, ToolCall
 
-from evals.agent_overload.metrics import InstructionFidelityMetric, JudgeAnswer, JudgeError, RoutingCorrectnessMetric
+from evals.agent_overload.grading.metrics import InstructionFidelityMetric, JudgeAnswer, JudgeError, RoutingCorrectnessMetric
 
 
 def test_routing_metrics_reexports_shared_judges() -> None:
-    from evals.agent_overload import metrics
+    from evals.agent_overload.grading import metrics
     from evals.shared import judges
 
     assert metrics.JudgeAnswer is judges.JudgeAnswer

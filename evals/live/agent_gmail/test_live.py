@@ -4,11 +4,11 @@ import os
 import pytest
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
-from evals.agent_gmail.cases import select_cases
-from evals.agent_gmail.config import EvalConfig
-from evals.agent_gmail.harness import run_case
-from evals.agent_gmail.metrics import GmailStateMetric, semantic
-from evals.agent_gmail.provider import Provider
+from evals.agent_gmail.cases.definitions import select_cases
+from evals.agent_gmail.runtime.config import EvalConfig
+from evals.agent_gmail.runtime.harness import run_case
+from evals.agent_gmail.grading.metrics import GmailStateMetric, semantic
+from evals.agent_gmail.runtime.provider import Provider
 
 
 @pytest.mark.live

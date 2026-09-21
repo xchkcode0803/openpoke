@@ -1,5 +1,5 @@
-from evals.agent_overload.stress_cases import stress_cases, stress_seeds
-from evals.agent_overload.provider import failure_kind
+from evals.agent_overload.cases.stress import stress_cases, stress_seeds
+from evals.agent_overload.runtime.provider import failure_kind
 
 
 def test_paired_rosters():
@@ -107,7 +107,7 @@ def test_judge_usage_is_recorded_once_per_request(monkeypatch):
 
 
 def test_artifact_runs_do_not_mix(tmp_path, monkeypatch):
-    from evals.agent_overload import provider
+    from evals.agent_overload.runtime import provider
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(provider, "_artifact_dir", None)
     provider.save_result("unavailable.jsonl", {"case": "first"})

@@ -3,12 +3,12 @@ from dataclasses import asdict
 from hashlib import sha256
 import json
 
-from evals.agent_gmail.cases import select_cases
-from evals.agent_gmail.metrics import CONTENT_CRITERION, REPORTING_CRITERION
-from evals.agent_overload.cases import full_cases
-from evals.agent_overload.inspection_cases import INSPECTION_CASES, INSPECTION_HISTORY
-from evals.agent_overload.routing_population import SCALE_VARIANTS, CHALLENGE_VARIANTS
-from evals.agent_overload.stress_cases import stress_cases
+from evals.agent_gmail.cases.definitions import select_cases
+from evals.agent_gmail.grading.metrics import CONTENT_CRITERION, REPORTING_CRITERION
+from evals.agent_overload.cases.base import full_cases
+from evals.agent_overload.cases.inspection import INSPECTION_CASES, INSPECTION_HISTORY
+from evals.agent_overload.cases.population import SCALE_VARIANTS, CHALLENGE_VARIANTS
+from evals.agent_overload.cases.stress import stress_cases
 
 
 EXPECTED = {

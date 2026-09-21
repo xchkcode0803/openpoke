@@ -8,17 +8,17 @@ from pathlib import Path
 
 import pytest
 
-from evals.agent_overload.challenge_cases import challenges
-from evals.agent_overload.routing_campaign import prepare, supervise
-from evals.agent_overload.routing_population import CHALLENGE_VARIANTS, SCALE_VARIANTS, Variant, materialize
+from evals.agent_overload.cases.challenges import challenges
+from evals.agent_overload.runtime.campaign import prepare, supervise
+from evals.agent_overload.cases.population import CHALLENGE_VARIANTS, SCALE_VARIANTS, Variant, materialize
 
 
 def test_collection_is_lightweight_and_baseline_unchanged():
     assert len(SCALE_VARIANTS) == 48
     assert len(CHALLENGE_VARIANTS) == 36
     assert all(not hasattr(item, 'initial_agents') for item in SCALE_VARIANTS + CHALLENGE_VARIANTS)
-    from evals.agent_overload.cases import full_cases
-    from evals.agent_overload.stress_cases import stress_cases
+    from evals.agent_overload.cases.base import full_cases
+    from evals.agent_overload.cases.stress import stress_cases
     cases = full_cases() + stress_cases()
     assert len(cases) == 99
     digest = hashlib.sha256(json.dumps([asdict(case) for case in cases], default=lambda value: sorted(value), sort_keys=True).encode()).hexdigest()
@@ -44,8 +44,8 @@ def test_nested_reproducible_populations(kind, index):
 
 @pytest.mark.parametrize('index', range(12))
 def test_scripted_discovery_is_feasible_and_isolated(index, monkeypatch):
-    from evals.agent_overload.harness import run_case
-    from evals.agent_overload.metrics import RoutingCorrectnessMetric
+    from evals.agent_overload.runtime.harness import run_case
+    from evals.agent_overload.grading.metrics import RoutingCorrectnessMetric
     from server.agents.interaction_agent import runtime
     challenge = challenges()[index]
     case, history, _ = materialize(Variant('challenge', index, 100))
@@ -101,7 +101,7 @@ def test_hidden_history_not_in_assignment_profiles(tmp_path, monkeypatch):
 
 
 def test_watchdog_timeout_and_memory(tmp_path, monkeypatch):
-    from evals.agent_overload import routing_campaign
+    from evals.agent_overload.runtime import campaign as routing_campaign
 
     monkeypatch.setattr(routing_campaign, '_memory_bytes', lambda _pid: 0)
     timeout = supervise([sys.executable, '-c', 'import time; time.sleep(5)'], tmp_path / 'timeout', seconds=.05)
@@ -114,7 +114,7 @@ def test_watchdog_timeout_and_memory(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize('raises', [False, True])
 def test_run_variant_removes_supervised_temporary_state(tmp_path, monkeypatch, raises):
-    from evals.agent_overload import routing_campaign
+    from evals.agent_overload.runtime import campaign as routing_campaign
 
     monkeypatch.setenv('EVAL_ARTIFACT_DIR', str(tmp_path / 'artifacts'))
     directories = []
@@ -141,7 +141,7 @@ def test_run_variant_removes_supervised_temporary_state(tmp_path, monkeypatch, r
 
 
 def test_population_covers_task_families_and_naming_styles():
-    from evals.agent_overload.routing_population import background_name, FAMILIES
+    from evals.agent_overload.cases.population import background_name, FAMILIES
     text = '\n'.join(background_name(i, 9137, 'Montreal', ('Hotel', 'Flights')) for i in range(5000)).casefold()
     assert all(family.casefold() in text for family in FAMILIES)
     assert all(pattern in text for pattern in ('ref ', 'account ', 'reservation ', 'stuff:', 'follow-up', 'records /'))

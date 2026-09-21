@@ -5,10 +5,10 @@ import os
 
 import pytest
 
-from evals.agent_overload.cases import DEVELOPMENT_CASES
-from evals.agent_overload.harness import run_case
-from evals.agent_overload.inspection_cases import INSPECTION_CASES, INSPECTION_HISTORY
-from evals.agent_overload.metrics import RoutingCorrectnessMetric
+from evals.agent_overload.cases.base import DEVELOPMENT_CASES
+from evals.agent_overload.runtime.harness import run_case
+from evals.agent_overload.cases.inspection import INSPECTION_CASES, INSPECTION_HISTORY
+from evals.agent_overload.grading.metrics import RoutingCorrectnessMetric
 
 
 def _tool_call(identifier: str, name: str, arguments: dict) -> dict:
@@ -125,7 +125,7 @@ def test_provider_timing_includes_only_request_and_retry_wait(monkeypatch):
 def test_evaluation_continues_after_a_failed_turn(monkeypatch, failure):
     import deepeval
     from deepeval.test_case import LLMTestCase
-    from evals.agent_overload import harness, provider
+    from evals.agent_overload.runtime import harness, provider
     import server.agents.interaction_agent.runtime as runtime_module
 
     first = LLMTestCase(name='first', input='request', actual_output='reply', metadata={})
@@ -166,7 +166,7 @@ def test_evaluation_verifies_stress_context_once(monkeypatch):
     from dataclasses import replace
     import deepeval
     from deepeval.test_case import LLMTestCase
-    from evals.agent_overload import harness, provider
+    from evals.agent_overload.runtime import harness, provider
 
     case = replace(INSPECTION_CASES[0], tags=frozenset({'stress'}))
     history = INSPECTION_HISTORY[case.name]

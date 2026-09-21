@@ -5,9 +5,10 @@ live harness, and deterministic and semantic graders. The standard benchmark tes
 delegation and instruction fidelity with stubbed workers; it does not measure
 downstream task execution.
 
-`cases.py` owns the standard suites, `inspection_cases.py` adds ownership-history
-scenarios, and `stress_cases.py` and `challenge_cases.py` define the large-roster
-collections. Capacity checks remain opt-in and local; do not include the
+`cases/base.py` owns the standard suites, `cases/inspection.py` adds ownership-history
+scenarios, and `cases/stress.py` and `cases/challenges.py` define the large-roster
+collections. `runtime/` owns the harness and campaigns, while `grading/` and
+`performance/` contain evaluators and opt-in measurements. Do not include the
 one-million-agent variants in routine verification.
 
 Live inference uses `google/gemini-3.8-flash`. Semantic grading uses

@@ -7,7 +7,7 @@ import asyncio
 import pytest
 from deepeval.test_case import LLMTestCase, ToolCall
 
-from evals.agent_overload.metrics import InstructionFidelityMetric
+from evals.agent_overload.grading.metrics import InstructionFidelityMetric
 
 
 def _semantic_case(instruction: str) -> LLMTestCase:
@@ -68,7 +68,7 @@ def test_live_semantic_grader(instruction: str, should_pass: bool) -> None:
 def test_live_fallback_judge_returns_structured_verdict() -> None:
     if not __import__("os").getenv("RUN_LIVE_EVALS"):
         pytest.skip("set RUN_LIVE_EVALS=1 to call live judges")
-    from evals.agent_overload.metrics import OpenRouterFallbackJudge
+    from evals.agent_overload.grading.metrics import OpenRouterFallbackJudge
 
     answer = asyncio.run(
         OpenRouterFallbackJudge().evaluate(

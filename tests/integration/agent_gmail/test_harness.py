@@ -1,7 +1,7 @@
 import asyncio
 
-from evals.agent_gmail.config import EvalConfig
-from evals.agent_gmail.harness import run_case
+from evals.agent_gmail.runtime.config import EvalConfig
+from evals.agent_gmail.runtime.harness import run_case
 from evals.agent_gmail.types import Case, Turn
 
 
@@ -82,7 +82,7 @@ def test_timeout_cancels_worker_and_restores_event_loop():
 
 def test_actual_nested_search_loop_and_callback():
     from evals.agent_gmail.types import Mail
-    from evals.agent_gmail.emulator import USER
+    from evals.agent_gmail.cases.mailbox import USER
     from server.agents.execution_agent.tasks.search_email.schemas import TASK_TOOL_NAME, SEARCH_TOOL_NAME, COMPLETE_TOOL_NAME
     async def scripted(role, messages, **kwargs):
         if role == "interaction":

@@ -4,7 +4,7 @@ from dataclasses import replace
 from itertools import product
 from random import Random
 
-from .cases import RoutingCase, RoutingTurn, ExpectedDelegation, validate_cases
+from .base import RoutingCase, RoutingTurn, ExpectedDelegation, validate_cases
 
 
 def stress_seeds() -> tuple[tuple[RoutingCase, str, tuple[str, ...]], ...]:

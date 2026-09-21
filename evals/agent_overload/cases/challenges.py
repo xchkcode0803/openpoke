@@ -1,6 +1,6 @@
 """Authored ownership evidence, independent of the production ranker."""
 from dataclasses import dataclass
-from .cases import RoutingCase, user, reuse, create, validate_cases
+from .base import RoutingCase, user, reuse, create, validate_cases
 
 
 @dataclass(frozen=True)

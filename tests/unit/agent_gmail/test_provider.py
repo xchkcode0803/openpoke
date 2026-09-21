@@ -1,8 +1,8 @@
 import asyncio
 import httpx
 import pytest
-from evals.agent_gmail.config import EvalConfig, DEFAULT_MODEL
-from evals.agent_gmail.provider import Provider, ProviderFailure
+from evals.agent_gmail.runtime.config import EvalConfig, DEFAULT_MODEL
+from evals.agent_gmail.runtime.provider import Provider, ProviderFailure
 
 
 def test_model_catalog_missing_tools_never_substitutes(monkeypatch):
